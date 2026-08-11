@@ -30,7 +30,9 @@ YOUR PROMPT (nothing touches this — compressing intent loses meaning)
          ▼
 STAGE 1 — TEA: Claude thinks efficiently
   Search before read. Graphify before source. Verdict first.
-  No token measurement — it's a behavior change, not a filter.
+  If graphify-out/graph.json exists → run `graphify query` before reading any file.
+  71.5× token reduction per query vs loading raw files (Graphify-Labs benchmark).
+  No token measurement at hook level — it's a behavior change, not a filter.
          │
          ▼  PreToolUse hook
 STAGE 2 — RTK: shell command output compressed
@@ -180,6 +182,7 @@ The tools doing the real work:
 - **RTK** — the proven savings engine (93.8% on file reads)
 - **Caveman** by [JuliusBrussee](https://github.com/JuliusBrussee/caveman)
 - **Headroom** by [headroomlabs-ai](https://github.com/headroomlabs-ai/headroom)
+- **Graphify** by [Graphify-Labs](https://github.com/Graphify-Labs/graphify) — knowledge graph for codebase navigation (Stage 1 dependency)
 - **Lean code / Ponytail** by [DietrichGebert](https://github.com/DietrichGebert/ponytail)
 - **TEA** (token-efficient-agent-kit) — session lifecycle management
 - **Superpowers** by [obra](https://github.com/obra/superpowers)

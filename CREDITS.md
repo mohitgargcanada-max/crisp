@@ -62,6 +62,18 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
 - **Our contribution:** superpowers/SKILL.md — adapted patterns for data pipeline and
   trading system use cases. Added AURORA-specific patterns.
 
+### Graphify
+- **Author:** [Graphify-Labs](https://github.com/Graphify-Labs/graphify)
+- **Repo:** github.com/Graphify-Labs/graphify
+- **What they built:** Turns any codebase (code, docs, SQL schemas, configs, PDFs) into
+  a queryable knowledge graph using local deterministic AST parsing. No vector store,
+  no API calls — all local. A `graphify query` returns a scoped subgraph instead of
+  loading raw files; on a ~92k-word corpus this is a **71.5× token reduction per query**.
+  Works with Claude Code, Cursor, Codex, Gemini CLI, and 17+ other assistants.
+- **Our contribution:** Documented graphify as a dependency/complement for CRISP Stage 1
+  (TEA). The "graphify before source" rule in CLAUDE.md and the Graphify First section
+  in the pipeline are ours; the tool and the savings are entirely theirs.
+
 ### Claude-Mem
 - **Author:** [thedotmack](https://github.com/thedotmack/claude-mem)
 - **Repo:** Available as claude-mem@thedotmack plugin
