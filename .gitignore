@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+memory-staging/
+handovers/
+turn_counter.txt
+_msg_counts.json
