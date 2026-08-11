@@ -1,61 +1,48 @@
 """
 skill_suggest.py — Auto-skill discovery on every prompt.
-Fired by UserPromptSubmit hook. Reads prompt from CLAUDE_HOOK_INPUT env var,
-matches against skill keyword map, prints suggestions to stdout (shown in Claude Code).
-Skills listed here are ones worth downloading if not already installed.
+Fired by UserPromptSubmit hook. Matches prompt against skill keyword map.
+Injects a tiny suggestion note via stdout JSON (Claude sees it, user sees it in context).
+Never blocks — always exits 0.
 """
 import os, json, sys, re
 
 SKILL_MAP = {
-    # token / context
     r"token|context|compress|compact|efficient|caveman|rtk": [
         "token-efficient-agent", "caveman", "token-optimizer"
     ],
-    # code review / audit
     r"review|audit|lint|bug|refactor|clean": [
         "lean-code-review", "code-review", "lean-code-audit", "lean-code-debt", "simplify"
     ],
-    # planning / spec
     r"plan|spec|design|architect|roadmap": [
         "lean-code-agent", "aurora-spec-discipline"
     ],
-    # memory / handoff
     r"memory|remember|handoff|rollover|session": [
         "memory-agent", "consolidate-memory", "supermemory"
     ],
-    # data / chart / viz
     r"chart|graph|plot|dashboard|visual|data.?viz": [
         "dataviz", "graphify"
     ],
-    # web / search / scrape
     r"search|scrape|web|crawl|fetch|url": [
         "content-research-writer", "lead-research-assistant"
     ],
-    # stock / finance / trading
     r"stock|trade|ticker|backtest|regime|signal|aurora|scanner|equity|market": [
         "aurora-stock-analysis", "stock-analysis", "ibd-canslim-model-book"
     ],
-    # doc / report / pdf
     r"pdf|doc|report|journal|markdown|write": [
         "pdf", "docx", "pptx", "changelog-generator"
     ],
-    # schedule / cron / automate
     r"schedule|cron|automat|recurring|loop|daily": [
         "schedule", "loop"
     ],
-    # UI / frontend
     r"ui|ux|frontend|react|component|design|style|css": [
         "ui-ux-pro-max", "ui-styling", "artifact-design", "banner-design"
     ],
-    # security
     r"security|secret|vault|auth|token.?leak|inject": [
         "security-review"
     ],
-    # mcp / tool / plugin
     r"mcp|tool|plugin|server|gateway|api": [
         "mcp-builder"
     ],
-    # git / pr / commit
     r"git|commit|pr|pull.?request|branch|merge": [
         "changelog-generator", "code-review"
     ],
@@ -71,7 +58,6 @@ def get_installed():
 
 def main():
     prompt = ""
-    # Claude Code passes hook input as JSON on stdin
     try:
         raw = sys.stdin.read()
         if raw.strip():
@@ -81,29 +67,25 @@ def main():
         pass
 
     if not prompt:
-        prompt = os.environ.get("CLAUDE_HOOK_PROMPT", "")
-
-    if not prompt:
         return
 
-    prompt_lower = prompt.lower()
     installed = get_installed()
-    suggestions = set()
+    suggestions = []
 
     for pattern, skills in SKILL_MAP.items():
-        if re.search(pattern, prompt_lower):
+        if re.search(pattern, prompt.lower()):
             for s in skills:
-                if s not in installed:
-                    suggestions.add(s)
+                if s not in installed and s not in suggestions:
+                    suggestions.append(s)
 
     if suggestions:
-        # Output to stderr only — doesn't block prompt, just informational
-        import sys as _sys
-        print(f"[SKILL-SUGGEST] Consider: {', '.join(sorted(suggestions))}", file=_sys.stderr)
+        # UserPromptSubmit: print JSON to stdout to inject as context Claude sees
+        note = f"[SKILL-SUGGEST] Skills not installed that may help: {', '.join(suggestions[:5])}. Install with: /install-skill <name>"
+        print(json.dumps({"continue": True, "hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": note}}))
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
         pass
-    sys.exit(0)  # never block the prompt
+    sys.exit(0)
