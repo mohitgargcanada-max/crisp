@@ -139,6 +139,14 @@ there. Shortcuts that *are* taken get flagged explicitly — `lean-debt: <why>;
 remove when <condition>` — so nobody mistakes a shortcut for a finished
 design.
 
+**Can this be measured?** Not the headline "54% less code" claim — that would
+need the same task done twice, once with and once without the discipline,
+which normal day-to-day usage never produces. What *is* measurable: how many
+real `lean-debt:` markers exist in a repo right now, and whether the codebase
+is adding more or less code per commit over time. `tea lean-stats <repo>`
+tracks both — real numbers pulled from git and the code itself, not an
+estimate — and reports them honestly as a trend, not a savings percentage.
+
 **Where:** `claude/skills/lean-code-agent/`.
 
 ---

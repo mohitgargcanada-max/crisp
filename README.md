@@ -28,6 +28,15 @@ logged anywhere to diff against — but Caveman's response-length *trend* is
 tracked from 2026-08-18, so drift is at least visible. Run `rtk gain` and
 `python ~/.claude/hooks/usage_report.py` after a week to see your real numbers.
 
+Lean code's 54% claim specifically can't be measured passively — it would need
+the same task run twice, once with and once without the discipline, which
+normal usage never produces. What *can* be measured, and now is:
+`tea lean-stats <repo>` tracks real `lean-debt:` marker counts (in actual code,
+not docs that just mention the convention) plus a git-based code-volume trend
+(average lines added per commit, recent half vs. earlier half). It's an
+honest proxy — code-volume trend, not a savings percentage — surfaced as a card
+in `tea dashboard --repo <path>`.
+
 ---
 
 ## What changed (2026-08-22 consolidation)
@@ -172,7 +181,7 @@ and `tea.js` CLI work fully; the automatic notify→turn-tracking hook
 ## Dashboard — see what each service is actually saving
 
 ```powershell
-node <path-to-crisp>/engine/cli/tea.js dashboard
+node <path-to-crisp>/engine/cli/tea.js dashboard --repo <path-to-a-code-repo>
 ```
 
 Generates a self-contained HTML report at `engine/.tea-stats/dashboard.html`
@@ -181,8 +190,10 @@ HTML) showing, per service: messages sent, commands run, responses logged,
 sessions started, and tokens/characters saved — pulled from what each hook
 actually logs (RTK via `rtk gain -f json`, Headroom's own
 `headroom-savings.jsonl`, TEA's `token-savings.jsonl`, Caveman's
-`response-log.jsonl`). No estimates beyond what each tool already records; if
-a service hasn't fired yet, its card says so instead of showing a fake zero.
+`response-log.jsonl`, Lean code's `lean-debt:` marker count + git code-volume
+trend for whatever repo `--repo` points at, defaulting to the current
+directory). No estimates beyond what each tool already records; if a service
+hasn't fired yet, its card says so instead of showing a fake zero.
 
 ---
 

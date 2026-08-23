@@ -58,8 +58,9 @@ Usage:
   node tea.js stats-reset
   node tea.js lean
   node tea.js debt [path] [--json]
+  node tea.js lean-stats [path] [--json]
   node tea.js gain [--json]
-  node tea.js dashboard [path] [--out <file>] [--json]
+  node tea.js dashboard [path] [--out <file>] [--repo <path>] [--json]
   node tea.js vault init [path]
   node tea.js vault github-init [path] [--repo token-efficient-agent-memory-vault]
   node tea.js vault sync [path] [--message <text>]
@@ -1109,6 +1110,24 @@ function vaultGithubInit(dirArg, repoName) {
   console.log(`vault_github_repo: ${name}`);
 }
 
+// Only these extensions get scanned — debt markers are inline code comments
+// marking real shortcuts, not something to find inside docs that merely
+// explain the convention (SKILL.md/README files, or this file's own marker
+// regexes just below, all mention the marker keywords in prose form).
+const DEBT_SCAN_EXTENSIONS = new Set([
+  ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".py", ".go", ".rs",
+  ".java", ".kt", ".c", ".cc", ".cpp", ".h", ".hpp", ".cs", ".rb", ".php",
+  ".swift", ".sh", ".ps1", ".sql", ".lua", ".scala",
+]);
+
+function looksLikeDebtTemplate(capturedText) {
+  const t = String(capturedText || "").trim();
+  // doc/example text uses angle-bracket placeholders or shows the regex
+  // pattern itself — neither is a real shortcut marker
+  return t.startsWith("<") || t.startsWith("`") || t.includes("\\s*(.+)")
+    || t.includes("<reason>") || t.includes("<condition>") || t.includes("<why>");
+}
+
 function scanDebt(root) {
   const markers = [
     /lean-debt:\s*(.+)/i,
@@ -1132,6 +1151,7 @@ function scanDebt(root) {
         continue;
       }
       if (!entry.isFile()) continue;
+      if (!DEBT_SCAN_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
       let text = "";
       try {
         const stat = fs.statSync(fullPath);
@@ -1145,6 +1165,7 @@ function scanDebt(root) {
         for (const marker of markers) {
           const match = line.match(marker);
           if (match) {
+            if (looksLikeDebtTemplate(match[1])) break;
             hits.push({
               path: path.relative(root, fullPath) || fullPath,
               line: index + 1,
@@ -1184,6 +1205,102 @@ function printDebt(rootArg, json) {
   console.log(`riskiest: ${hits[0].path}:${hits[0].line}`);
 }
 
+function gitLeanTrend(repoPath) {
+  const check = spawnSync("git", ["-C", repoPath, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8", windowsHide: true });
+  if (check.status !== 0 || check.stdout.trim() !== "true") return null;
+
+  const log = spawnSync(
+    "git",
+    ["-C", repoPath, "log", "--pretty=format:@@%H %ad", "--date=short", "--numstat"],
+    { encoding: "utf8", windowsHide: true, maxBuffer: 1024 * 1024 * 64 }
+  );
+  if (log.status !== 0 || !log.stdout) return { commitsAnalyzed: 0 };
+
+  const commits = [];
+  let current = null;
+  for (const line of log.stdout.split(/\r?\n/)) {
+    if (line.startsWith("@@")) {
+      if (current) commits.push(current);
+      const rest = line.slice(2);
+      const spaceIdx = rest.indexOf(" ");
+      current = { hash: rest.slice(0, spaceIdx), date: rest.slice(spaceIdx + 1), added: 0, removed: 0 };
+      continue;
+    }
+    if (!current || !line.trim()) continue;
+    const m = line.match(/^(\d+|-)\t(\d+|-)\t/);
+    if (m) {
+      current.added += m[1] === "-" ? 0 : Number(m[1]);
+      current.removed += m[2] === "-" ? 0 : Number(m[2]);
+    }
+  }
+  if (current) commits.push(current);
+  if (!commits.length) return { commitsAnalyzed: 0 };
+
+  // git log lists newest first — split into recent half vs. earlier half
+  // so a trend is visible without the caller needing to know a cutoff date.
+  const half = Math.max(1, Math.floor(commits.length / 2));
+  const recent = commits.slice(0, half);
+  const earlier = commits.slice(half).length ? commits.slice(half) : recent;
+  const avgAdded = (arr) => Math.round(arr.reduce((s, c) => s + c.added, 0) / arr.length);
+
+  return {
+    commitsAnalyzed: commits.length,
+    recentCount: recent.length,
+    earlierCount: earlier.length,
+    avgLinesAddedRecent: avgAdded(recent),
+    avgLinesAddedEarlier: avgAdded(earlier),
+  };
+}
+
+function leanSnapshotsPath() {
+  return path.join(STATS_DIR, "lean-snapshots.jsonl");
+}
+
+function recordLeanSnapshot(root, debtCount, trend) {
+  fs.mkdirSync(STATS_DIR, { recursive: true });
+  const row = {
+    timestamp: new Date().toISOString(),
+    root,
+    debtCount,
+    commitsAnalyzed: trend ? trend.commitsAnalyzed || 0 : 0,
+    avgLinesAddedRecent: trend && trend.commitsAnalyzed ? trend.avgLinesAddedRecent : null,
+    avgLinesAddedEarlier: trend && trend.commitsAnalyzed ? trend.avgLinesAddedEarlier : null,
+  };
+  fs.appendFileSync(leanSnapshotsPath(), JSON.stringify(row) + "\n", "utf8");
+  return row;
+}
+
+function printLeanStats(rootArg, json) {
+  const root = path.resolve(rootArg || process.cwd());
+  const hits = scanDebt(root);
+  const trend = gitLeanTrend(root);
+  recordLeanSnapshot(root, hits.length, trend);
+  const output = {
+    root,
+    debtCount: hits.length,
+    debtHits: hits,
+    gitTrend: trend,
+    snapshotLog: leanSnapshotsPath(),
+    note: "avgLinesAdded is code-volume-per-commit, not a savings percentage — there is no counterfactual (no 'without lean code' run of the same task) to diff against.",
+  };
+  if (json) {
+    console.log(JSON.stringify(output, null, 2));
+    return;
+  }
+  console.log(`root: ${root}`);
+  console.log(`lean_debt_count: ${hits.length}`);
+  if (!trend || !trend.commitsAnalyzed) {
+    console.log("git_trend: not a git repo, or no commits yet");
+  } else {
+    const direction = trend.avgLinesAddedRecent < trend.avgLinesAddedEarlier ? "shrinking"
+      : trend.avgLinesAddedRecent > trend.avgLinesAddedEarlier ? "growing" : "flat";
+    console.log(`commits_analyzed: ${trend.commitsAnalyzed}`);
+    console.log(`avg_lines_added_per_commit: recent half ${trend.avgLinesAddedRecent}, earlier half ${trend.avgLinesAddedEarlier} (${direction})`);
+    console.log("note: code-volume trend, not a savings claim — no counterfactual run exists to diff against");
+  }
+  console.log(`snapshot_logged: ${leanSnapshotsPath()}`);
+}
+
 function printGain(json) {
   const rows = readStats();
   const totals = summarizeStats(rows);
@@ -1191,7 +1308,7 @@ function printGain(json) {
     token_savings: totals,
     lean_code_gain: {
       measured: false,
-      note: "Run lean review/audit on a repo to estimate removable code. Token savings are recorded for compression commands only.",
+      note: "Run `tea lean-stats <repo>` for real debt-marker counts and a git-based code-volume trend. Token savings are recorded for compression commands only.",
     },
   };
   if (json) {
@@ -1200,7 +1317,7 @@ function printGain(json) {
   }
   console.log(`tokens_saved_est: ${totals.savedTokens}`);
   console.log(`saved_percent_est: ${totals.savedPercent}`);
-  console.log("lean_code_gain: run `tea lean` for the ladder and `tea debt <path>` for shortcut markers");
+  console.log("lean_code_gain: run `tea lean-stats <repo>` for real debt counts + git code-volume trend");
 }
 
 function readJsonlFile(file) {
@@ -1225,7 +1342,7 @@ function runRtkGainJson() {
   }
 }
 
-function gatherDashboard(dirArg) {
+function gatherDashboard(dirArg, repoArg) {
   const vaultDir = resolveMemoryDir(dirArg);
   const observations = readObservations(vaultDir);
   const byType = {};
@@ -1265,6 +1382,10 @@ function gatherDashboard(dirArg) {
   const totalWords = responseRows.reduce((sum, r) => sum + Number(r.words || 0), 0);
   const avgWords = responseRows.length ? Math.round(totalWords / responseRows.length) : 0;
 
+  const leanRoot = path.resolve(repoArg || process.cwd());
+  const leanDebt = scanDebt(leanRoot);
+  const leanTrend = gitLeanTrend(leanRoot);
+
   return {
     generatedAt: new Date().toISOString(),
     vaultDir,
@@ -1282,6 +1403,11 @@ function gatherDashboard(dirArg) {
       totalWords,
       avgWords,
       recent: responseRows.slice(-20),
+    },
+    lean: {
+      root: leanRoot,
+      debtCount: leanDebt.length,
+      trend: leanTrend,
     },
   };
 }
@@ -1340,6 +1466,15 @@ function renderDashboardHtml(data) {
       name: "Caveman",
       stat: data.caveman.responses ? `${data.caveman.avgWords} avg words/response` : "no responses logged yet",
       sub: data.caveman.responses ? `${data.caveman.responses.toLocaleString()} responses, ${data.caveman.totalWords.toLocaleString()} words total` : "no verbose baseline exists — trend only",
+    },
+    {
+      name: "Lean code",
+      stat: data.lean.trend && data.lean.trend.commitsAnalyzed
+        ? `${data.lean.trend.avgLinesAddedRecent} vs ${data.lean.trend.avgLinesAddedEarlier} lines/commit`
+        : "not a git repo here",
+      sub: data.lean.trend && data.lean.trend.commitsAnalyzed
+        ? `${data.lean.debtCount} lean-debt marker(s) in ${path.basename(data.lean.root)} — trend, not a savings claim`
+        : `pass --repo <path> to a git repo · ${data.lean.debtCount} lean-debt marker(s) found here`,
     },
   ];
 
@@ -1401,8 +1536,8 @@ function renderDashboardHtml(data) {
 </html>`;
 }
 
-function printDashboard(dirArg, outArg, json) {
-  const data = gatherDashboard(dirArg);
+function printDashboard(dirArg, outArg, repoArg, json) {
+  const data = gatherDashboard(dirArg, repoArg);
   if (json) {
     console.log(JSON.stringify(data, null, 2));
     return;
@@ -1499,13 +1634,18 @@ function main() {
     return;
   }
 
+  if (command === "lean-stats") {
+    printLeanStats(args.slice(1).find((arg) => !arg.startsWith("-")), hasFlag(args, "--json"));
+    return;
+  }
+
   if (command === "gain") {
     printGain(hasFlag(args, "--json"));
     return;
   }
 
   if (command === "dashboard") {
-    printDashboard(positionalArgs(args.slice(1))[0], argValue(args, "--out", ""), hasFlag(args, "--json"));
+    printDashboard(positionalArgs(args.slice(1))[0], argValue(args, "--out", ""), argValue(args, "--repo", ""), hasFlag(args, "--json"));
     return;
   }
 
