@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "token-efficient-agent": {
+      "command": "node",
+      "args": [
+        "C:/path/to/token-efficient-agent-kit/mcp-server/server.js"
+      ],
+      "env": {
+        "TOKEN_EFFICIENT_AGENT_MODE": "balanced"
+      }
+    }
+  }
+}

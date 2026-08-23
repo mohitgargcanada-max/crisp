@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Token Efficient Agent Kit Workflow</title>
+  <desc id="desc">Workflow showing Claude Code, Codex, terminal commands, AI Chat Exporter, memory vault, context gateway, Graphify, and refresh cycle.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f9fb; }
+      .card { fill: #ffffff; stroke: #ccd5df; stroke-width: 2; rx: 14; }
+      .green { fill: #eef8f6; stroke: #79b7ae; stroke-width: 2; rx: 14; }
+      .gold { fill: #fff7e8; stroke: #ddb56c; stroke-width: 2; rx: 14; }
+      .title { font: 700 30px Segoe UI, Arial, sans-serif; fill: #1f2933; }
+      .h { font: 700 20px Segoe UI, Arial, sans-serif; fill: #1f2933; }
+      .t { font: 15px Segoe UI, Arial, sans-serif; fill: #334155; }
+      .small { font: 13px Segoe UI, Arial, sans-serif; fill: #52616f; }
+      .mono { font: 13px Consolas, monospace; fill: #334155; }
+      .arrow { stroke: #45616f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .muted { fill: #64748b; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#45616f"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1200" height="900"/>
+  <text class="title" x="52" y="58">Token Efficient Agent Kit</text>
+  <text class="t" x="52" y="88">Compact memory and token-savings workflow for Claude Code, Codex, terminal tasks, and repo context.</text>
+  <rect class="card" x="55" y="135" width="250" height="135"/>
+  <text class="h" x="80" y="172">Claude Code</text>
+  <text class="t" x="80" y="204">Lifecycle hooks capture</text>
+  <text class="small" x="80" y="228">prompts, tool use, failures,</text>
+  <text class="small" x="80" y="248">compaction, session end</text>
+  <rect class="card" x="55" y="315" width="250" height="135"/>
+  <text class="h" x="80" y="352">Codex</text>
+  <text class="t" x="80" y="384">MCP tools available</text>
+  <text class="small" x="80" y="408">memory, observation search,</text>
+  <text class="small" x="80" y="428">compression, health checks</text>
+  <rect class="card" x="55" y="495" width="250" height="135"/>
+  <text class="h" x="80" y="532">Terminal</text>
+  <text class="t" x="80" y="564">Run commands through</text>
+  <text class="mono" x="80" y="590">tea run -- command</text>
+  <text class="small" x="80" y="615">Shows savings after task</text>
+  <rect class="card" x="55" y="675" width="250" height="135"/>
+  <text class="h" x="80" y="712">AI Chat Exporter</text>
+  <text class="t" x="80" y="744">Browser chat capture</text>
+  <text class="small" x="80" y="768">exports, compress draft,</text>
+  <text class="small" x="80" y="788">recall/save local memory</text>
+  <rect class="green" x="430" y="180" width="330" height="170"/>
+  <text class="h" x="462" y="220">Token + Memory Engine</text>
+  <text class="t" x="462" y="254">Compresses noisy output</text>
+  <text class="t" x="462" y="282">Preserves exact commands/errors</text>
+  <text class="t" x="462" y="310">Writes compact observations</text>
+  <rect class="green" x="430" y="410" width="330" height="170"/>
+  <text class="h" x="462" y="450">Memory Vault</text>
+  <text class="t" x="462" y="484">Local persistent files</text>
+  <text class="mono" x="462" y="514">memory-map.md</text>
+  <text class="mono" x="462" y="540">observations.jsonl</text>
+  <text class="small" x="462" y="565">Optional private GitHub sync</text>
+  <rect class="gold" x="880" y="135" width="260" height="135"/>
+  <text class="h" x="910" y="172">Context Gateway</text>
+  <text class="t" x="910" y="204">Browser page</text>
+  <text class="mono" x="910" y="230">127.0.0.1:6768</text>
+  <text class="small" x="910" y="252">Build context packs from files</text>
+  <rect class="gold" x="880" y="315" width="260" height="135"/>
+  <text class="h" x="910" y="352">Graphify</text>
+  <text class="t" x="910" y="384">Project knowledge graph</text>
+  <text class="small" x="910" y="408">Architecture, paths, relations</text>
+  <text class="small" x="910" y="428">Not for every small log</text>
+  <rect class="gold" x="880" y="495" width="260" height="135"/>
+  <text class="h" x="910" y="532">Refresh Cycle</text>
+  <text class="t" x="910" y="564">Review memory growth</text>
+  <text class="mono" x="910" y="590">memory-refresh plan</text>
+  <text class="small" x="910" y="615">Delete only with confirm</text>
+  <path class="arrow" d="M305 202 C360 202 370 220 430 240"/>
+  <path class="arrow" d="M305 382 C360 382 370 330 430 300"/>
+  <path class="arrow" d="M305 562 C360 562 370 490 430 490"/>
+  <path class="arrow" d="M305 742 C380 730 390 575 430 535"/>
+  <path class="arrow" d="M595 350 L595 410"/>
+  <path class="arrow" d="M760 265 C820 245 835 220 880 205"/>
+  <path class="arrow" d="M760 495 C830 495 835 390 880 382"/>
+  <path class="arrow" d="M760 520 C835 540 835 560 880 562"/>
+  <text class="small muted" x="52" y="844">Rule of thumb: observations remember what happened; Context Gateway builds task context; Graphify maps stable project structure.</text>
+  <text class="small muted" x="52" y="868">Safety: no secrets, no raw private documents, and no deletion without preview plus explicit confirmation.</text>
+</svg>

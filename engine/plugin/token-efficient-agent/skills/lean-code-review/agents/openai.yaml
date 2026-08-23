@@ -1,0 +1,4 @@
+name: lean-code-review
+description: Deletion-first overengineering review. Report removable code, reuse opportunities, stdlib/native replacements, and shrink opportunities.
+version: 0.1.0
+

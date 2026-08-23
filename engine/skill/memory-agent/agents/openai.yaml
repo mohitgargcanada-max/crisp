@@ -1,0 +1,4 @@
+name: memory-agent
+description: Token-efficient durable memory behavior. Recall small relevant slices from memory-map markdown or a memory backend; save only stable safe facts.
+version: 0.1.0
+

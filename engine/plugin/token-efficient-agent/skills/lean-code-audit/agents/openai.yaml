@@ -1,0 +1,4 @@
+name: lean-code-audit
+description: Repo simplification audit that ranks deletion, reuse, stdlib/native replacement, and abstraction shrink opportunities.
+version: 0.1.0
+

@@ -1,0 +1,4 @@
+name: lean-code-debt
+description: Lightweight shortcut/debt ledger for intentional lean-code tradeoffs.
+version: 0.1.0
+

@@ -48,7 +48,7 @@ SKILL_MAP = {
     ],
 }
 
-INSTALLED_PATH = r"C:\Users\mohit\.claude\skills"
+INSTALLED_PATH = os.path.join(os.path.expanduser("~"), ".claude", "skills")
 
 # Skills that were merged into a newer bundle — don't nag for the old name
 # if the bundle that replaced it is already installed.

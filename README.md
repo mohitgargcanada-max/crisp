@@ -1,7 +1,8 @@
 # CRISP — Compressed Retrieval & Intelligent Signal Pipeline
 
-> Full-stack token compression for Claude Code + OpenAI Codex.  
-> Attacks every stage of the AI coding pipeline — not just one end.
+> Full-stack token compression + persistent memory for Claude Code and OpenAI Codex.
+> One clone, one installer, both hosts — attacks every stage of the AI coding
+> pipeline, not just one end.
 
 ---
 
@@ -14,14 +15,39 @@ Here's what we actually measured from real usage data:
 |---|---|---|---|
 | **RTK** | 9,337 commands over ~3 months | **93.8% on file reads, 15–100% on git diffs** | `rtk gain` — live telemetry |
 | **Caveman** | Response length | ~65–75% fewer words | Author's benchmark — not independently verified |
-| **Headroom** | Tool output compression | >15% saving threshold before it fires | `usage_report.py` — live telemetry (added 2026-08-18) |
+| **Headroom** | Tool output compression | >15% saving threshold before it fires | `usage_report.py` — live telemetry |
 | **TEA lifecycle hooks** | 567 hook events | ~0% net saving at hook level | Our own data — TEA adds metadata, doesn't compress |
 | **Lean code** | Code length | ~54% less code generated | Author's controlled benchmark — varies by task |
-| **Caveman** (response length) | N/A yet | not a savings % — no verbose baseline exists | `usage_report.py` — logs real words/response from this date forward |
 
-**What this means:** RTK and Headroom are now both measured from live telemetry. Lean code and Caveman's *savings* claims are still unverified — there's no shadow "verbose version" logged anywhere to diff against — but Caveman's response-length *trend* is tracked starting 2026-08-18, so drift is at least visible even if a clean before/after isn't. Run `rtk gain` and `python ~/.claude/hooks/usage_report.py` after a week to see your real numbers.
+**What this means:** RTK and Headroom are measured from live telemetry. Lean code
+and Caveman's *savings* claims are unverified — no shadow "verbose version" is
+logged anywhere to diff against — but Caveman's response-length *trend* is
+tracked from 2026-08-18, so drift is at least visible. Run `rtk gain` and
+`python ~/.claude/hooks/usage_report.py` after a week to see your real numbers.
 
 ---
+
+## What changed (2026-08-22 consolidation)
+
+CRISP used to be three separate, partly-overlapping things: this repo (whose
+Codex support was placeholder code that was never actually wired up), a private
+`token-efficient-agent-kit` repo (the real engine, including the real Codex
+integration), and a now-retired `agent-memory-vault` repo (a dead duplicate).
+
+They're one repo now:
+- **`engine/`** — the former `token-efficient-agent-kit`, merged in whole. This is
+  the actual engine: `tea.js` CLI, the MCP server, the lifecycle hook shared by
+  both Claude Code and Codex, and adapters for a dozen other hosts (Cursor,
+  Windsurf, Gemini CLI, ChatGPT, and more — only Claude Code and Codex are
+  wired up by `install.ps1`/`install.sh` today, the rest are there if you want them).
+- **`codex/AGENTS.md`** now matches what's *actually* live — the token-efficient-agent
+  MCP server + `tea.js` commands + notify-based session rollover — instead of the
+  invented hook-file scheme it had before.
+- **`claude/hooks/auto_handover.py`** was trimmed — it used to write its own
+  separate handover docs, duplicating what `engine/`'s lifecycle hook already
+  does. It now does only the one thing the engine doesn't: categorizing message
+  text into feedback/project/user candidates for Claude Code's own memory files.
+- **`agent-memory-vault`** is retired — folded into `engine/memory-vault/`.
 
 ## The pipeline
 
@@ -29,39 +55,31 @@ Here's what we actually measured from real usage data:
 YOUR PROMPT (nothing touches this — compressing intent loses meaning)
          │
          ▼
-STAGE 1 — TEA: Claude thinks efficiently
-  Search before read. Graphify before source. Verdict first.
-  If graphify-out/graph.json exists → run `graphify query` before reading any file.
+STAGE 1 — Graphify: query the knowledge graph before reading raw files
   71.5× token reduction per query vs loading raw files (Graphify-Labs benchmark).
-  No token measurement at hook level — it's a behavior change, not a filter.
          │
          ▼  PreToolUse hook
 STAGE 2 — RTK: shell command output compressed
   grep -r "import pandas" .  →  rtk grep -r "import pandas" .
-  Strips color codes, timestamps, duplicates from output.
   Measured: 93.8% avg saving on file reads, 15–100% on diffs.
          │
          ▼  tool executes
 STAGE 3 — Headroom: large results filtered before context
-  Fires only when saving > 15%. Caps output at 3000 chars.
-  Dedupes repeated lines. Extracts top-level JSON keys.
-  Every firing event logged to usage-stats/headroom-savings.jsonl.
+  Fires only when saving > 15%. Caps output, dedupes repeated lines.
          │
          ▼
 STAGE 4 — Lean code: less code written = fewer output tokens
   Before writing: does this exist? stdlib? one line?
-  Author claims ~54% less code. Unverified in general use.
          │
          ▼
 STAGE 5 — Caveman: shorter responses
   Drops filler, articles, pleasantries from Claude's replies.
-  Author claims ~65–75% fewer words. Feels accurate in practice.
          │
          ▼  Stop hook
-STAGE 6 — usage_tracker: real response length logged
-  Every assistant turn's word/char count -> usage-stats/response-log.jsonl.
-  Not a savings % (no verbose baseline) — but makes the trend checkable
-  instead of taking Stage 5's claim on faith.
+STAGE 6 — engine/: the shared lifecycle + memory layer
+  tea-lifecycle-hook.js fires on every event, for BOTH Claude Code and Codex.
+  Writes observations.jsonl + session-handoffs, tracks session rollover,
+  exposes it all through an MCP server (observe_add, observe_search, memory_health...).
 ```
 
 ---
@@ -70,70 +88,81 @@ STAGE 6 — usage_tracker: real response length logged
 
 ```
 crisp/
+├── LICENSE                    # MIT — covers CRISP's own code + engine/
+├── THIRD_PARTY_NOTICES.md     # exact upstream license per dependency
+├── CREDITS.md                 # who built what
 ├── claude/
-│   ├── CLAUDE.md              # Drop-in global config
-│   ├── settings.json          # Hook wiring for Claude Code
+│   ├── CLAUDE.md               # Drop-in global config
+│   ├── settings.json           # Hook wiring for Claude Code
 │   ├── hooks/
-│   │   ├── headroom_filter.py # PostToolUse: compress tool results, logs gain
-│   │   ├── auto_handover.py   # Stop: memory staging + handover at 13 msgs
-│   │   ├── usage_tracker.py   # Stop: logs response word/char count
-│   │   ├── usage_report.py    # manual: `rtk gain` equivalent for Headroom + response length
+│   │   ├── headroom_filter.py  # PostToolUse: compress tool results, logs gain
+│   │   ├── auto_handover.py    # Stop: memory-candidate staging (trimmed, see above)
+│   │   ├── usage_tracker.py    # Stop: logs response word/char count
+│   │   ├── usage_report.py     # manual: `rtk gain` equivalent for Headroom + response length
 │   │   ├── session_start_mem.py # SessionStart: load prior session context
-│   │   └── skill_suggest.py   # UserPromptSubmit: suggest missing skills
+│   │   └── skill_suggest.py    # UserPromptSubmit: suggest missing skills
 │   └── skills/
-│       ├── token-kit/         # Unified: caveman + TEA + RTK behavior
-│       ├── headroom/          # Tool output compression patterns
-│       ├── context-engineer/  # Session + CLAUDE.md optimization
-│       └── superpowers/       # Multi-agent orchestration patterns
+│       ├── token-kit/          # Unified: caveman + TEA + RTK behavior
+│       ├── headroom/           # Tool output compression patterns
+│       ├── context-engineer/   # Session + CLAUDE.md optimization
+│       ├── superpowers/        # Multi-agent orchestration patterns
+│       ├── graphify/           # Vendored as-is (MIT, see LICENSE inside)
+│       └── lean-code-agent/    # "Lazy senior developer" code-minimalism skill
 ├── codex/
-│   ├── AGENTS.md              # Same pipeline for Codex CLI
-│   └── hooks/
-│       ├── pre-tool.js        # RTK equivalent for Codex
-│       ├── post-tool.js       # Headroom equivalent for Codex
-│       └── session-end.js     # Memory + handover for Codex
-├── examples/
-│   └── web-project.md         # Example workflow with real output
-├── install.ps1                # Windows installer
-└── install.sh                 # Mac/Linux installer
+│   └── AGENTS.md               # Same pipeline for Codex — real wiring, see below
+├── engine/                    # ex-token-efficient-agent-kit, merged in whole
+│   ├── cli/tea.js              # stats, vault, observe, session-rollover, wake, cost, instincts...
+│   ├── mcp-server/              # the token-efficient-agent MCP server
+│   ├── adapters/
+│   │   ├── generic-hooks/      # tea-lifecycle-hook.js — shared by every host
+│   │   ├── claude-code/        # install-hooks.ps1, agent defs
+│   │   ├── codex/               # notify-multiplexer.ps1, AUTOMATION_AGENTS_SNIPPET.md
+│   │   └── (cursor/, windsurf/, gemini-cli/, chatgpt/, hermes/, ...)
+│   ├── memory-vault/            # TEMPLATE ONLY — your real vault populates locally, never committed
+│   └── docs/                    # full engine docs (LAYMAN_GUIDE.md is the best start)
+├── install.ps1                 # Windows installer — both Claude Code and Codex
+└── install.sh                  # Mac/Linux installer — Claude Code fully, Codex partially (see below)
 ```
 
 ---
 
-## Quick start — Claude Code
+## Quick start — Windows (both hosts)
 
-```bash
-# 1. Clone
+```powershell
 git clone https://github.com/mohitgargcanada-max/crisp
 cd crisp
-
-# 2. Install (Windows)
 ./install.ps1
-
-# 2. Install (Mac/Linux)
-chmod +x install.sh && ./install.sh
 ```
 
-Then install RTK separately (it's a binary, not included):
+This installs Claude Code hooks + skills, merges `CLAUDE.md`, and for Codex:
+appends the automation block into `~/.codex/AGENTS.md`, prints the MCP server
+snippet for you to paste into `~/.codex/config.toml` (never auto-edited — it can
+hold secrets), and prints the notify-wiring line for session-rollover tracking.
+
+Install RTK separately (it's a binary, not vendored):
 ```bash
 cargo install rtk
 ```
 
-Open a new Claude Code session. You should see:
+Install claude-mem separately (it's a live plugin with its own database):
 ```
-[SESSION] Turn counter reset to 0.
+/plugin marketplace add thedotmack/claude-mem
+/plugin install claude-mem@thedotmack
 ```
-That confirms hooks are active.
 
----
+Both checks run automatically at the end of `install.ps1`/`install.sh` and tell
+you if either is missing.
 
-## Quick start — Codex
+## Quick start — Mac/Linux
 
 ```bash
-# Copy to your project root
-cp crisp/codex/AGENTS.md ./AGENTS.md
-mkdir -p .codex/hooks
-cp crisp/codex/hooks/*.js .codex/hooks/
+chmod +x install.sh && ./install.sh
 ```
+
+Claude Code side is fully automated, same as Windows. Codex side: the MCP server
+and `tea.js` CLI work fully; the automatic notify→turn-tracking hook
+(`engine/adapters/codex/notify-multiplexer.ps1`) is PowerShell/Windows-only today
+— a shell port is a known gap, not yet built.
 
 ---
 
@@ -145,37 +174,36 @@ rtk gain          # total savings
 rtk gain --history  # per-command breakdown
 ```
 
-**Headroom** (check hook error log, or real savings):
+**Headroom / Caveman trend**:
 ```
-~/.claude/hooks/hook-errors.log     # empty = working fine
-python ~/.claude/hooks/usage_report.py # real before/after chars saved
-```
-
-**Caveman response-length trend**:
-```
-python ~/.claude/hooks/usage_report.py  # avg words/response, by week
+python ~/.claude/hooks/usage_report.py
 ```
 
-**Caveman**: just look at Claude's responses — no "Sure! I'd be happy to help..."
+**Session rollover / memory** (either host):
+```powershell
+node <path-to-crisp>/engine/cli/tea.js session-rollover status
+node <path-to-crisp>/engine/cli/tea.js stats
+```
 
-**Session rollover**: at turn 8 you'll see `[ROLLOVER] Turn 8 — write handoff...`
+**Claude Code**: new session should print `[SESSION] Turn counter reset to 0.`
+
+**Codex**: check `~/.codex/AGENTS.md` for the block between
+`<!-- CRISP:AUTOMATION_SNIPPET:START -->` / `:END` markers.
 
 ---
 
 ## Manual install (no script)
 
 ```bash
-# Hooks
+# Claude Code hooks + skills
 cp claude/hooks/*.py ~/.claude/hooks/
-
-# Skills
 cp -r claude/skills/* ~/.claude/skills/
+cat claude/CLAUDE.md >> ~/.claude/CLAUDE.md   # append, don't replace
+# merge the "hooks" block from claude/settings.json into your existing settings.json
 
-# CLAUDE.md — append, don't replace
-cat claude/CLAUDE.md >> ~/.claude/CLAUDE.md
-
-# settings.json — merge the "hooks" block manually into your existing file
-# See claude/settings.json for the exact hook entries to add
+# Codex
+cat engine/adapters/codex/AUTOMATION_AGENTS_SNIPPET.md >> ~/.codex/AGENTS.md
+# paste the MCP server block (see engine/adapters/codex/README.md) into ~/.codex/config.toml
 ```
 
 ---
@@ -183,28 +211,20 @@ cat claude/CLAUDE.md >> ~/.claude/CLAUDE.md
 ## Requirements
 
 - Claude Code with hooks support (~v0.117+)
-- Python 3.8+ (hook scripts)
-- RTK binary — [install separately](https://github.com/rusttokenkit/rtk)
-- Codex CLI v0.9+ (for Codex hooks)
+- Python 3.8+ (Claude Code hook scripts)
+- Node.js (engine/ CLI + MCP server)
+- RTK binary — install separately, see above
+- Codex CLI (for Codex integration)
 
 ---
 
-## Credits
+## Credits & License
 
-CRISP is integration work — we wired existing tools together. Full credits in [CREDITS.md](CREDITS.md).
+CRISP is integration work — we wired existing tools together, and (as of this
+consolidation) merged our own engine in as part of the same repo. Full credits
+in [CREDITS.md](CREDITS.md); exact upstream licenses per dependency in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The tools doing the real work:
-- **RTK** — the proven savings engine (93.8% on file reads)
-- **Caveman** by [JuliusBrussee](https://github.com/JuliusBrussee/caveman)
-- **Headroom** by [headroomlabs-ai](https://github.com/headroomlabs-ai/headroom)
-- **Graphify** by [Graphify-Labs](https://github.com/Graphify-Labs/graphify) — knowledge graph for codebase navigation (Stage 1 dependency)
-- **Lean code / Ponytail** by [DietrichGebert](https://github.com/DietrichGebert/ponytail)
-- **TEA** (token-efficient-agent-kit) — session lifecycle management
-- **Superpowers** by [obra](https://github.com/obra/superpowers)
-- **Claude-mem** by [thedotmack](https://github.com/thedotmack/claude-mem)
-
----
-
-## License
-
-MIT
+**License:** MIT for CRISP's own code and the merged `engine/` — see
+[LICENSE](LICENSE). Third-party skills keep their own upstream license; see
+THIRD_PARTY_NOTICES.md before redistributing further.

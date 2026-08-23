@@ -22,13 +22,16 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
   Added caveman auto-clarity rules for destructive ops and security warnings.
 
 ### Token-Efficient Agent (TEA)
-- **Author:** [Mohit Garg](https://github.com/mohitgargcanada) / token-efficient-agent-kit
-- **Repo:** C:/Users/mohit/tools/token-efficient-agent-kit (private)
-- **What they built:** Full lifecycle hook framework (PreToolUse, PostToolUse, 
-  UserPromptSubmit, SessionStart, Stop, and 15+ other events) + MCP server for 
-  token tracking + memory vault + session rollover logic.
-- **Our contribution:** The plumbing that connects everything. auto_handover.py,
-  session_start_mem.py, skill_suggest.py all build on TEA's hook infrastructure.
+- **Author:** Mohit Garg — originally token-efficient-agent-kit, a separate private repo
+- **Now:** merged into this repo as `engine/` (2026-08-22 consolidation) — one clone
+  gets both the pipeline plumbing and the actual engine. MIT-licensed as part of CRISP.
+- **What it is:** Full lifecycle hook framework (PreToolUse, PostToolUse,
+  UserPromptSubmit, SessionStart, Stop, and 15+ other events) + MCP server for
+  token tracking + memory vault + session rollover logic + the real Claude Code
+  *and* Codex integration (`engine/adapters/`).
+- **Note:** `engine/memory-vault/` ships as a template only (README + empty
+  structure) — the populated version (observations, handoffs) is per-user runtime
+  data and is never committed. See the privacy note in the main README.
 
 ### Headroom
 - **Author:** [headroomlabs-ai](https://github.com/headroomlabs-ai/headroom)
@@ -94,11 +97,12 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
 | `claude/hooks/skill_suggest.py` | Prompt-pattern → skill suggestion engine |
 | `claude/CLAUDE.md` | Unified always-on config (merged caveman + TEA + rules) |
 | `claude/settings.json` | Hook wiring blueprint |
-| `codex/AGENTS.md` | Codex port of the full pipeline |
-| `codex/hooks/*.js` | Codex hook implementations |
-| Pipeline concept | Naming, documenting, and connecting all 5 stages |
+| `codex/AGENTS.md` | Codex port of the full pipeline, wired to the real `engine/adapters/codex/` integration (MCP server + notify + tea.js) |
+| `engine/` | TEA, merged in whole — see above |
+| Pipeline concept | Naming, documenting, and connecting all stages, across both Claude Code and Codex |
 | This README | Layman-friendly explanation of the full pipeline |
 
 **In short:** CRISP is integration work, not invention. We stood on the shoulders 
 of excellent open-source tools and wrote the glue that makes them work together 
-as a single unified pipeline.
+as a single unified pipeline. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+for exact upstream licenses and what's vendored vs. independently reimplemented.

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "token-efficient-agent": {
+      "command": "node",
+      "args": [
+        "<CRISP_HOME>/mcp-server/server.js"
+      ],
+      "env": {
+        "TOKEN_EFFICIENT_AGENT_MODE": "balanced"
+      }
+    }
+  }
+}

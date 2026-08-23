@@ -1,0 +1,35 @@
+{
+  "name": "token-efficient-agent",
+  "version": "0.1.0",
+  "description": "Vendor-neutral token efficiency plugin for compact replies, compact tool use, and compressed agent context.",
+  "author": {
+    "name": "Mohit",
+    "email": "mohit@example.com",
+    "url": "https://example.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "token-efficiency",
+    "compression",
+    "agent-workflow",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Token Efficient Agent",
+    "shortDescription": "Compact agent work with exact technical detail.",
+    "longDescription": "A vendor-neutral plugin scaffold that teaches agents to reduce input and output tokens by using compact replies, narrow retrieval, log and diff summarization, memory compression, and raw-detail fallback when exact text matters.",
+    "developerName": "Mohit",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use token-efficient-agent for this task.",
+      "Compress logs and keep only decisive errors.",
+      "Keep replies compact but technically exact."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

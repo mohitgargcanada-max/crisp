@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Token Efficient Prompt Pad</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;background:#f6f7f9;color:#111}
+    header{padding:14px 18px;border-bottom:1px solid #ddd;background:#fff;display:flex;gap:12px;align-items:center}
+    h1{font-size:18px;margin:0}
+    main{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 58px);box-sizing:border-box}
+    section{display:flex;flex-direction:column;min-width:0}
+    label{font-weight:700;margin-bottom:6px}
+    textarea{flex:1;width:100%;resize:none;border:1px solid #ccc;border-radius:8px;padding:12px;font:14px/1.45 Consolas,monospace;box-sizing:border-box;background:#fff}
+    button,select{border:1px solid #bbb;border-radius:7px;background:#fff;padding:8px 10px}
+    button{cursor:pointer}
+    .controls{display:flex;gap:8px;margin-left:auto;align-items:center}
+    .stats{font-size:12px;color:#555;margin-top:6px}
+    @media(max-width:850px){main{grid-template-columns:1fr;height:auto}textarea{height:42vh}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Token Efficient Prompt Pad</h1>
+    <div class="controls">
+      <select id="mode">
+        <option value="balanced">balanced</option>
+        <option value="safe">safe</option>
+        <option value="aggressive">aggressive</option>
+      </select>
+      <button id="compress">Compress</button>
+      <button id="copy">Copy Output</button>
+      <button id="clear">Clear</button>
+    </div>
+  </header>
+  <main>
+    <section>
+      <label for="input">Draft / dictated / pasted prompt</label>
+      <textarea id="input" autofocus></textarea>
+      <div class="stats" id="inputStats">0 chars, 0 token est.</div>
+    </section>
+    <section>
+      <label for="output">Compressed prompt to paste into ChatGPT / Claude / Codex</label>
+      <textarea id="output"></textarea>
+      <div class="stats" id="outputStats">0 chars, 0 token est.</div>
+    </section>
+  </main>
+  <script>
+    const input = document.getElementById("input");
+    const output = document.getElementById("output");
+    const mode = document.getElementById("mode");
+    const inputStats = document.getElementById("inputStats");
+    const outputStats = document.getElementById("outputStats");
+    const estimate = (text) => Math.ceil(String(text || "").length / 4);
+    const uniq = (arr, v, max=80) => { v=String(v||"").trim(); if(v && !arr.includes(v) && arr.length<max) arr.push(v); };
+    function anchors(text){
+      const out=[]; const pats=[/[A-Za-z]:\\[^\s"'<>|]+/g, /`([^`]+)`/g, /\b[A-Za-z_$][\w$]*\([^)]{0,80}\)/g, /\b[A-Z][A-Za-z0-9_]*(?:Error|Exception|Warning)\b/g, /\b[A-Z]{2,10}-\d+\b/g, /\b\d{4}-\d{2}-\d{2}\b/g];
+      for(const p of pats){ for(const m of String(text||"").matchAll(p)) uniq(out, m[1] || m[0], 40); }
+      return out;
+    }
+    function important(line){
+      return /(must|never|always|exact|path|command|error|failed|warning|token|secret|permission|auth|scope|validation|requirement|deliverable|output|install|run|copy|paste|github|mcp|skill|plugin)/i.test(line) || /[`"'\\/:]/.test(line) || /^#{1,6}\s/.test(line) || /^[-*]\s/.test(line) || /^\d+\.\s/.test(line);
+    }
+    function compress(text, m){
+      const max = m === "aggressive" ? 80 : m === "safe" ? 180 : 120;
+      const keep=[]; const seen=new Set(); let blank=0, dup=0, low=0;
+      for(const raw of String(text||"").replace(/\r\n/g,"\n").split("\n")){
+        const line=raw.trim(); if(!line){blank++; continue;}
+        const norm=line.toLowerCase().replace(/\d+/g,"#").replace(/\s+/g," ");
+        if(seen.has(norm)){dup++; continue;} seen.add(norm);
+        if(/^(sure|certainly|of course|happy to|please note|basically|really|just)\b/i.test(line)){low++; continue;}
+        if(important(line) || keep.length < max) uniq(keep,line,max); else low++;
+      }
+      const body=keep.join("\n"); const a=anchors(text);
+      return [`--- compressed prompt ---`,`mode: ${m}`,`estimated_tokens_before: ${estimate(text)}`,`estimated_tokens_after: ${estimate(body)}`,`removed_blank: ${blank}`,`removed_duplicate: ${dup}`,`removed_low_signal: ${low}`,a.length ? `preserve_exact: ${a.slice(0,30).join(" | ")}` : "preserve_exact: none detected","---","",body.trim()].join("\n");
+    }
+    function refresh(){
+      inputStats.textContent = `${input.value.length} chars, ${estimate(input.value)} token est.`;
+      outputStats.textContent = `${output.value.length} chars, ${estimate(output.value)} token est.`;
+    }
+    input.addEventListener("input", refresh); output.addEventListener("input", refresh);
+    document.getElementById("compress").onclick = () => { output.value = compress(input.value, mode.value); refresh(); };
+    document.getElementById("copy").onclick = async () => { await navigator.clipboard.writeText(output.value); };
+    document.getElementById("clear").onclick = () => { input.value=""; output.value=""; refresh(); };
+    refresh();
+  </script>
+</body>
+</html>

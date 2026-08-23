@@ -1,0 +1,235 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SessionStart"
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event InstructionsLoaded"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "UserPromptExpansion": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event UserPromptExpansion"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PermissionDenied"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolUseFailure"
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolBatch"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event Notification"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SubagentStart"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SubagentStop"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event TaskCreated"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event TaskCompleted"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event Stop"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event StopFailure"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PreCompact"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostCompact"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SessionEnd"
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event ConfigChange"
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event CwdChanged"
+          }
+        ]
+      }
+    ]
+  }
+}

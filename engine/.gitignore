@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+.tea-stats/
+memory-vault/*
+!memory-vault/
+!memory-vault/README.md

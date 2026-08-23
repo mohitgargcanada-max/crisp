@@ -1,0 +1,7 @@
+interface:
+  display_name: "Token Efficient Agent"
+  short_description: "Compact agent work with exact technical detail."
+  default_prompt: "Use $token-efficient-agent to keep this task compact while preserving exact technical details."
+
+policy:
+  allow_implicit_invocation: true

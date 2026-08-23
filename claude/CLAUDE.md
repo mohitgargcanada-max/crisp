@@ -38,7 +38,7 @@ Return to compact after.
 Fallback memory: current chat first → local memory map → external memory.
 Recall only small relevant facts, compress before use.
 Never save secrets or sensitive info without explicit approval.
-Default vault: C:\Users\mohit\tools\token-efficient-agent-kit\memory-vault.
+Default vault: <CRISP_HOME>\memory-vault (i.e. wherever this repo's engine/ was installed).
 
 ## Auto Memory — what to save, when, without being asked
 

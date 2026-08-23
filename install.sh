@@ -4,6 +4,7 @@
 
 set -e
 CRISP="$(cd "$(dirname "$0")" && pwd)"
+CRISPHOME="$CRISP/engine"
 CLAUDE="$HOME/.claude"
 HOOKS="$CLAUDE/hooks"
 SKILLS="$CLAUDE/skills"
@@ -13,9 +14,9 @@ echo "CRISP installer"
 echo "==============="
 
 # 1. Create dirs
-mkdir -p "$HOOKS" "$SKILLS" "$CODEX/hooks"
+mkdir -p "$HOOKS" "$SKILLS" "$CODEX"
 
-# 2. Copy hooks
+# 2. Copy Claude Code hooks
 echo ""
 echo "Installing Claude Code hooks..."
 cp "$CRISP/claude/hooks/"*.py "$HOOKS/"
@@ -23,53 +24,89 @@ echo "  ✓ headroom_filter.py   -> ~/.claude/hooks/"
 echo "  ✓ auto_handover.py     -> ~/.claude/hooks/"
 echo "  ✓ session_start_mem.py -> ~/.claude/hooks/"
 echo "  ✓ skill_suggest.py     -> ~/.claude/hooks/"
+echo "  ✓ usage_tracker.py     -> ~/.claude/hooks/"
+echo "  ✓ usage_report.py      -> ~/.claude/hooks/"
 
-# 3. Copy skills
+# 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 echo ""
 echo "Installing Claude Code skills..."
-for skill in token-kit headroom context-engineer superpowers; do
+for skill in token-kit headroom context-engineer superpowers graphify lean-code-agent; do
   cp -r "$CRISP/claude/skills/$skill" "$SKILLS/"
   echo "  ✓ $skill -> ~/.claude/skills/$skill"
 done
 
-# 4. Copy Codex hooks
-echo ""
-echo "Installing Codex hooks..."
-cp "$CRISP/codex/hooks/"*.js "$CODEX/hooks/"
-echo "  ✓ pre-tool.js    -> ~/.codex/hooks/"
-echo "  ✓ post-tool.js   -> ~/.codex/hooks/"
-echo "  ✓ session-end.js -> ~/.codex/hooks/"
-
-# 5. Merge CLAUDE.md
+# 4. Merge CLAUDE.md
 echo ""
 echo "Merging CLAUDE.md..."
+CRISP_MD_BODY="$(sed "s#<CRISP_HOME>#$CRISPHOME#g" "$CRISP/claude/CLAUDE.md")"
 if [ -f "$CLAUDE/CLAUDE.md" ]; then
   if grep -q "CRISP" "$CLAUDE/CLAUDE.md" 2>/dev/null; then
     echo "  CRISP already in CLAUDE.md — skipped"
   else
     echo "" >> "$CLAUDE/CLAUDE.md"
     echo "# --- CRISP pipeline (auto-added) ---" >> "$CLAUDE/CLAUDE.md"
-    cat "$CRISP/claude/CLAUDE.md" >> "$CLAUDE/CLAUDE.md"
+    echo "$CRISP_MD_BODY" >> "$CLAUDE/CLAUDE.md"
     echo "  ✓ Appended CRISP sections to existing CLAUDE.md"
   fi
 else
-  cp "$CRISP/claude/CLAUDE.md" "$CLAUDE/CLAUDE.md"
+  echo "$CRISP_MD_BODY" > "$CLAUDE/CLAUDE.md"
   echo "  ✓ Created new CLAUDE.md"
 fi
 
-# 6. Settings
+# 5. Settings
 echo ""
 echo "Checking settings.json..."
+RESOLVED_SETTINGS="$CLAUDE/settings.crisp-hooks.resolved.json"
+sed -e "s#<CRISP_HOME>#$CRISPHOME#g" -e "s#<CLAUDE_HOME>#$CLAUDE#g" "$CRISP/claude/settings.json" > "$RESOLVED_SETTINGS"
 if [ -f "$CLAUDE/settings.json" ]; then
   echo "  Existing settings.json found."
-  echo "  Manually merge hook blocks from: $CRISP/claude/settings.json"
-  echo "  (Auto-merge skipped to avoid breaking existing config)"
+  echo "  Manually merge the 'hooks' block from: $RESOLVED_SETTINGS"
+  echo "  (paths already resolved for this machine; auto-merge skipped to avoid breaking existing config)"
 else
-  cp "$CRISP/claude/settings.json" "$CLAUDE/settings.json"
+  cp "$RESOLVED_SETTINGS" "$CLAUDE/settings.json"
   echo "  ✓ Created settings.json from CRISP template"
 fi
 
-# 7. Check RTK
+# 6. Codex: merge the automation snippet into ~/.codex/AGENTS.md (idempotent, marker-based)
+echo ""
+echo "Installing Codex integration..."
+AGENTS_PATH="$CODEX/AGENTS.md"
+SNIPPET_PATH="$CRISPHOME/adapters/codex/AUTOMATION_AGENTS_SNIPPET.md"
+START_MARKER="<!-- CRISP:AUTOMATION_SNIPPET:START -->"
+END_MARKER="<!-- CRISP:AUTOMATION_SNIPPET:END -->"
+
+SNIPPET_BODY="$(sed "s#<CRISP_HOME>#$CRISPHOME#g" "$SNIPPET_PATH")"
+
+if [ -f "$AGENTS_PATH" ] && grep -qF "$START_MARKER" "$AGENTS_PATH"; then
+  awk -v start="$START_MARKER" -v end="$END_MARKER" -v body="$START_MARKER
+$SNIPPET_BODY
+$END_MARKER" '
+    $0 == start { print body; skip=1; next }
+    $0 == end { skip=0; next }
+    skip { next }
+    { print }
+  ' "$AGENTS_PATH" > "$AGENTS_PATH.tmp" && mv "$AGENTS_PATH.tmp" "$AGENTS_PATH"
+  echo "  ✓ Updated existing CRISP block in ~/.codex/AGENTS.md"
+elif [ -f "$AGENTS_PATH" ]; then
+  { echo ""; echo ""; echo "$START_MARKER"; echo "$SNIPPET_BODY"; echo "$END_MARKER"; } >> "$AGENTS_PATH"
+  echo "  ✓ Appended CRISP block to existing ~/.codex/AGENTS.md"
+else
+  { echo "$START_MARKER"; echo "$SNIPPET_BODY"; echo "$END_MARKER"; } > "$AGENTS_PATH"
+  echo "  ✓ Created ~/.codex/AGENTS.md with CRISP block"
+fi
+
+# 7. Codex: print (never auto-edit) the config.toml MCP server snippet
+echo ""
+echo "Add this to your ~/.codex/config.toml (not auto-edited — it can hold secrets):"
+echo "  [mcp_servers.token-efficient-agent]"
+echo "  command = \"node\""
+echo "  args = [\"$CRISPHOME/mcp-server/server.js\"]"
+echo ""
+echo "NOTE: the notify-based session-rollover wiring (adapters/codex/notify-multiplexer.ps1)"
+echo "is PowerShell/Windows-only today. On Linux/macOS the MCP server + tea.js CLI still"
+echo "work fully; only the automatic notify->turn-tracking hook needs a shell port."
+
+# 8. Check RTK (installed separately — binary, not vendored)
 echo ""
 echo "Checking RTK..."
 if command -v rtk &>/dev/null; then
@@ -79,6 +116,19 @@ else
   echo "    cargo install rtk   (requires Rust: https://rustup.rs)"
 fi
 
+# 9. Check claude-mem (installed via plugin marketplace — not vendored)
 echo ""
-echo "Done. Open a new Claude Code session to activate CRISP."
-echo "Verify: you should see [SESSION] Turn counter reset to 0. on startup."
+echo "Checking claude-mem..."
+INSTALLED_PLUGINS="$CLAUDE/plugins/installed_plugins.json"
+if [ -f "$INSTALLED_PLUGINS" ] && grep -q '"claude-mem@' "$INSTALLED_PLUGINS" 2>/dev/null; then
+  echo "  ✓ claude-mem plugin found"
+else
+  echo "  claude-mem not found. Install it from the plugin marketplace:"
+  echo "    /plugin marketplace add thedotmack/claude-mem"
+  echo "    /plugin install claude-mem@thedotmack"
+fi
+
+echo ""
+echo "Done."
+echo "Claude Code: open a new session — you should see [SESSION] Turn counter reset to 0."
+echo "Codex: paste the config.toml block above, then restart Codex."
