@@ -9,8 +9,27 @@ from pathlib import Path
 from datetime import datetime
 
 ERROR_LOG  = Path.home() / ".claude" / "hooks" / "hook-errors.log"
+STATS_DIR  = Path.home() / ".claude" / "hooks" / "usage-stats"
+GAIN_LOG   = STATS_DIR / "headroom-savings.jsonl"
 MIN_SIZE   = 500    # chars — skip compression on small outputs
 MAX_OUTPUT = 3000   # hard cap on what we pass back
+
+def _log_gain(tool_name, before, after, pct):
+    """Persist every firing event — before/after/pct is real, measured data."""
+    try:
+        STATS_DIR.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "timestamp": datetime.now().isoformat(),
+            "tool": tool_name,
+            "before": before,
+            "after": after,
+            "saved": before - after,
+            "pct": pct,
+        }
+        with open(GAIN_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
 
 NOISE_RE = re.compile(
     r"^\s*$"                                        # blank lines
@@ -95,6 +114,7 @@ def main():
         before, after = len(raw_str), len(compressed)
         if after < before * 0.85:
             pct = round((1 - after / before) * 100)
+            _log_gain(tool_name, before, after, pct)
             print(f"[HEADROOM:{tool_name} -{pct}%]\n{compressed}")
             return
     except Exception:
@@ -105,6 +125,7 @@ def main():
     before, after = len(raw_str), len(compressed)
     if after < before * 0.85:
         pct = round((1 - after / before) * 100)
+        _log_gain(tool_name, before, after, pct)
         print(f"[HEADROOM:{tool_name} -{pct}%]\n{compressed}")
 
 if __name__ == "__main__":

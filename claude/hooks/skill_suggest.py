@@ -50,6 +50,14 @@ SKILL_MAP = {
 
 INSTALLED_PATH = r"C:\Users\mohit\.claude\skills"
 
+# Skills that were merged into a newer bundle — don't nag for the old name
+# if the bundle that replaced it is already installed.
+SUPERSEDED_BY = {
+    "token-efficient-agent": "token-kit",
+    "caveman": "token-kit",
+    "token-optimizer": "token-kit",
+}
+
 def get_installed():
     try:
         return set(os.listdir(INSTALLED_PATH))
@@ -75,6 +83,8 @@ def main():
     for pattern, skills in SKILL_MAP.items():
         if re.search(pattern, prompt.lower()):
             for s in skills:
+                if SUPERSEDED_BY.get(s) in installed:
+                    continue
                 if s not in installed and s not in suggestions:
                     suggestions.append(s)
 

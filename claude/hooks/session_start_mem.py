@@ -12,10 +12,18 @@ MEMORY_DIR = Path.home() / ".claude" / "projects"
 HANDOVER_DIR = Path.home() / ".claude" / "handovers"
 ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
 
-def latest_handover():
+def _project_slug(cwd):
+    return Path(cwd).name.lower().replace(" ", "-").replace("\\", "").replace("/", "")
+
+def latest_handover(cwd):
+    """Latest handover for THIS project only (per-project subdir), falling back
+    to any legacy flat file at the handovers root for pre-migration compat."""
     if not HANDOVER_DIR.exists():
         return None
-    docs = sorted(HANDOVER_DIR.glob("handover_*.md"), reverse=True)
+    project_dir = HANDOVER_DIR / _project_slug(cwd)
+    docs = sorted(project_dir.glob("handover_*.md"), reverse=True) if project_dir.exists() else []
+    if not docs:
+        docs = sorted(HANDOVER_DIR.glob("handover_*.md"), reverse=True)
     return docs[0] if docs else None
 
 def main():
@@ -27,7 +35,7 @@ def main():
     cwd = event.get("cwd", os.getcwd())
     project_name = Path(cwd).name
 
-    handover = latest_handover()
+    handover = latest_handover(cwd)
     handover_line = f"- Latest handover: {handover}" if handover else "- No prior handover found"
 
     # This text is injected into Claude's context at session start

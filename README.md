@@ -14,11 +14,12 @@ Here's what we actually measured from real usage data:
 |---|---|---|---|
 | **RTK** | 9,337 commands over ~3 months | **93.8% on file reads, 15–100% on git diffs** | `rtk gain` — live telemetry |
 | **Caveman** | Response length | ~65–75% fewer words | Author's benchmark — not independently verified |
-| **Headroom** | Tool output compression | >15% saving threshold before it fires | Built-in — fires only when it helps |
+| **Headroom** | Tool output compression | >15% saving threshold before it fires | `usage_report.py` — live telemetry (added 2026-08-18) |
 | **TEA lifecycle hooks** | 567 hook events | ~0% net saving at hook level | Our own data — TEA adds metadata, doesn't compress |
 | **Lean code** | Code length | ~54% less code generated | Author's controlled benchmark — varies by task |
+| **Caveman** (response length) | N/A yet | not a savings % — no verbose baseline exists | `usage_report.py` — logs real words/response from this date forward |
 
-**What this means:** RTK is the proven workhorse. Everything else helps but lacks independent measurement. Your actual results will vary — run `rtk gain` after a week to see your real numbers.
+**What this means:** RTK and Headroom are now both measured from live telemetry. Lean code and Caveman's *savings* claims are still unverified — there's no shadow "verbose version" logged anywhere to diff against — but Caveman's response-length *trend* is tracked starting 2026-08-18, so drift is at least visible even if a clean before/after isn't. Run `rtk gain` and `python ~/.claude/hooks/usage_report.py` after a week to see your real numbers.
 
 ---
 
@@ -44,7 +45,7 @@ STAGE 2 — RTK: shell command output compressed
 STAGE 3 — Headroom: large results filtered before context
   Fires only when saving > 15%. Caps output at 3000 chars.
   Dedupes repeated lines. Extracts top-level JSON keys.
-  No historical data yet — newly added.
+  Every firing event logged to usage-stats/headroom-savings.jsonl.
          │
          ▼
 STAGE 4 — Lean code: less code written = fewer output tokens
@@ -55,6 +56,12 @@ STAGE 4 — Lean code: less code written = fewer output tokens
 STAGE 5 — Caveman: shorter responses
   Drops filler, articles, pleasantries from Claude's replies.
   Author claims ~65–75% fewer words. Feels accurate in practice.
+         │
+         ▼  Stop hook
+STAGE 6 — usage_tracker: real response length logged
+  Every assistant turn's word/char count -> usage-stats/response-log.jsonl.
+  Not a savings % (no verbose baseline) — but makes the trend checkable
+  instead of taking Stage 5's claim on faith.
 ```
 
 ---
@@ -67,8 +74,10 @@ crisp/
 │   ├── CLAUDE.md              # Drop-in global config
 │   ├── settings.json          # Hook wiring for Claude Code
 │   ├── hooks/
-│   │   ├── headroom_filter.py # PostToolUse: compress tool results
+│   │   ├── headroom_filter.py # PostToolUse: compress tool results, logs gain
 │   │   ├── auto_handover.py   # Stop: memory staging + handover at 13 msgs
+│   │   ├── usage_tracker.py   # Stop: logs response word/char count
+│   │   ├── usage_report.py    # manual: `rtk gain` equivalent for Headroom + response length
 │   │   ├── session_start_mem.py # SessionStart: load prior session context
 │   │   └── skill_suggest.py   # UserPromptSubmit: suggest missing skills
 │   └── skills/
@@ -136,9 +145,15 @@ rtk gain          # total savings
 rtk gain --history  # per-command breakdown
 ```
 
-**Headroom** (check hook error log):
+**Headroom** (check hook error log, or real savings):
 ```
-~/.claude/hooks/hook-errors.log  # empty = working fine
+~/.claude/hooks/hook-errors.log     # empty = working fine
+python ~/.claude/hooks/usage_report.py # real before/after chars saved
+```
+
+**Caveman response-length trend**:
+```
+python ~/.claude/hooks/usage_report.py  # avg words/response, by week
 ```
 
 **Caveman**: just look at Claude's responses — no "Sure! I'd be happy to help..."

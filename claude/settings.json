@@ -51,6 +51,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python C:\\Users\\mohit\\.claude\\hooks\\usage_tracker.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node C:\\Users\\mohit\\tools\\token-efficient-agent-kit\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event Stop"
           }
         ]

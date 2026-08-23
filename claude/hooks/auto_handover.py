@@ -8,7 +8,8 @@ import json, os, re, sys
 from datetime import datetime
 from pathlib import Path
 
-THRESHOLD    = 13
+THRESHOLD      = 13
+RETENTION_DAYS = 7
 HANDOVER_DIR = Path.home() / ".claude" / "handovers"
 COUNTER_FILE = Path.home() / ".claude" / "hooks" / "_msg_counts.json"
 # STAGING_FILE now computed per project in _save_staging()
@@ -62,9 +63,13 @@ def _categorize(msgs):
                     break
     return found
 
+def _project_slug(cwd):
+    """Filesystem-safe project name, shared by staging file + handover dir."""
+    return Path(cwd).name.lower().replace(" ","-").replace("\\","").replace("/","")
+
 def _project_staging(cwd):
     """Returns project-specific staging file path."""
-    project = Path(cwd).name.lower().replace(" ","-").replace("\\","").replace("/","")
+    project = _project_slug(cwd)
     staging_dir = Path.home() / ".claude" / "memory-staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
     return staging_dir / f"{project}.md"
@@ -80,9 +85,10 @@ def _save_staging(session_id, cwd, found):
     with open(staging,"a",encoding="utf-8") as f: f.writelines(lines)
 
 def _write_handover(session_id, count, cwd, msgs):
-    HANDOVER_DIR.mkdir(parents=True, exist_ok=True)
+    project_dir = HANDOVER_DIR / _project_slug(cwd)
+    project_dir.mkdir(parents=True, exist_ok=True)
     ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = HANDOVER_DIR / f"handover_{ts}.md"
+    path = project_dir / f"handover_{ts}.md"
     project = Path(cwd).name
     tx = "\n".join(f"{m['role'].upper()}: {m['text'][:300]}" for m in msgs[-12:])
     path.write_text(f"""# Handover {datetime.now().strftime("%Y-%m-%d %H:%M")}
@@ -99,6 +105,17 @@ Project: {project} | CWD: {cwd} | Session: {session_id[:12]} | Messages: {count}
 ~/.claude/memory-staging/{project}.md
 """)
     return path
+
+def _prune_old_handovers():
+    """Delete handover_*.md older than RETENTION_DAYS, across every project
+    subdirectory. Runs alongside each new handover write, so cleanup is
+    self-maintaining -- no separate scheduled task."""
+    if not HANDOVER_DIR.exists(): return
+    cutoff = datetime.now().timestamp() - RETENTION_DAYS * 86400
+    for f in HANDOVER_DIR.glob("*/handover_*.md"):
+        try:
+            if f.stat().st_mtime < cutoff: f.unlink()
+        except: pass
 
 def _notify(msg):
     os.system('powershell -WindowStyle Hidden -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(\'' + msg.replace("'","") + '\', \'Handover\')"')
@@ -123,6 +140,7 @@ def main():
 
     if count >= THRESHOLD:
         path = _write_handover(session_id, count, cwd, msgs)
+        _prune_old_handovers()
         data[session_id] = 0
         _save_counts(data)
         print(f"\n[HANDOVER] {count} msgs — open fresh session.\nDoc: {path}", file=sys.stderr)
