@@ -59,6 +59,7 @@ Usage:
   node tea.js lean
   node tea.js debt [path] [--json]
   node tea.js gain [--json]
+  node tea.js dashboard [path] [--out <file>] [--json]
   node tea.js vault init [path]
   node tea.js vault github-init [path] [--repo token-efficient-agent-memory-vault]
   node tea.js vault sync [path] [--message <text>]
@@ -1202,6 +1203,217 @@ function printGain(json) {
   console.log("lean_code_gain: run `tea lean` for the ladder and `tea debt <path>` for shortcut markers");
 }
 
+function readJsonlFile(file) {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      try { return JSON.parse(line); } catch { return null; }
+    })
+    .filter(Boolean);
+}
+
+function runRtkGainJson() {
+  try {
+    const result = spawnSync("rtk", ["gain", "-f", "json"], { encoding: "utf8", windowsHide: true });
+    if (result.status !== 0 || !result.stdout) return null;
+    const parsed = JSON.parse(result.stdout);
+    return parsed.summary || null;
+  } catch {
+    return null;
+  }
+}
+
+function gatherDashboard(dirArg) {
+  const vaultDir = resolveMemoryDir(dirArg);
+  const observations = readObservations(vaultDir);
+  const byType = {};
+  for (const o of observations) {
+    const t = o.type || "unknown";
+    byType[t] = (byType[t] || 0) + 1;
+  }
+  const messagesSent = byType.UserPromptSubmit || 0;
+
+  const statsRows = readStats();
+  const teaStats = summarizeStats(statsRows);
+  const byHookEvent = {};
+  for (const row of statsRows) {
+    const e = row.hookEvent || null;
+    if (e) byHookEvent[e] = (byHookEvent[e] || 0) + 1;
+  }
+  const sessionsStarted = byHookEvent.SessionStart || 0;
+
+  const rtk = runRtkGainJson();
+  // "Commands run" is best measured by RTK (it wraps every shell command);
+  // fall back to 0 rather than a misleading count if RTK isn't installed.
+  const commandsRun = rtk ? rtk.total_commands : 0;
+
+  const usageStatsDir = path.join(os.homedir(), ".claude", "hooks", "usage-stats");
+  const headroomRows = readJsonlFile(path.join(usageStatsDir, "headroom-savings.jsonl"));
+  const headroomTotals = headroomRows.reduce((acc, r) => {
+    acc.events += 1;
+    acc.before += Number(r.before || 0);
+    acc.after += Number(r.after || 0);
+    acc.saved += Number(r.saved || 0);
+    return acc;
+  }, { events: 0, before: 0, after: 0, saved: 0 });
+  headroomTotals.savedPercent = headroomTotals.before
+    ? Math.round((headroomTotals.saved / headroomTotals.before) * 100) : 0;
+
+  const responseRows = readJsonlFile(path.join(usageStatsDir, "response-log.jsonl"));
+  const totalWords = responseRows.reduce((sum, r) => sum + Number(r.words || 0), 0);
+  const avgWords = responseRows.length ? Math.round(totalWords / responseRows.length) : 0;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    vaultDir,
+    counts: {
+      messagesSent,
+      commandsRun,
+      responsesLogged: responseRows.length,
+      sessionsStarted,
+    },
+    rtk,
+    tea: teaStats,
+    headroom: headroomTotals,
+    caveman: {
+      responses: responseRows.length,
+      totalWords,
+      avgWords,
+      recent: responseRows.slice(-20),
+    },
+  };
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function svgBarRow(label, value, max, colorVar, y, unit) {
+  const width = max > 0 ? Math.max(2, Math.round((value / max) * 460)) : 2;
+  const displayValue = unit === "%" ? `${value}%` : Number(value).toLocaleString();
+  return `
+    <text x="0" y="${y + 14}" class="bar-label">${esc(label)}</text>
+    <rect x="140" y="${y}" width="460" height="22" rx="4" class="bar-track"></rect>
+    <rect x="140" y="${y}" width="${width}" height="22" rx="4" fill="var(${colorVar})"></rect>
+    <text x="${140 + width + 8}" y="${y + 16}" class="bar-value">${esc(displayValue)}</text>`;
+}
+
+function renderDashboardHtml(data) {
+  const services = [
+    { label: "RTK (shell output)", value: data.rtk ? data.rtk.total_saved : null, color: "--c-rtk" },
+    { label: "Headroom (tool results, chars)", value: data.headroom.saved, color: "--c-headroom" },
+    { label: "TEA (compress/lifecycle, est.)", value: data.tea.savedTokens, color: "--c-tea" },
+  ].filter((s) => s.value !== null);
+  const maxSaved = Math.max(1, ...services.map((s) => s.value));
+  const barsHeight = services.length * 40 + 20;
+  const bars = services.map((s, i) => svgBarRow(s.label, s.value, maxSaved, s.color, 20 + i * 40)).join("");
+
+  const rtkPct = data.rtk ? Math.round(data.rtk.avg_savings_pct) : null;
+  const headroomPct = data.headroom.events ? data.headroom.savedPercent : null;
+
+  const statTiles = [
+    { label: "Messages sent", value: data.counts.messagesSent },
+    { label: "Commands run", value: data.counts.commandsRun },
+    { label: "Responses logged", value: data.counts.responsesLogged },
+    { label: "Sessions started", value: data.counts.sessionsStarted },
+  ];
+
+  const serviceCards = [
+    {
+      name: "RTK",
+      stat: data.rtk ? `${data.rtk.total_saved.toLocaleString()} tokens saved` : "not installed / no data yet",
+      sub: data.rtk ? `${data.rtk.total_commands.toLocaleString()} commands, avg ${rtkPct}% saved` : "run `rtk gain` to check",
+    },
+    {
+      name: "Headroom",
+      stat: data.headroom.events ? `${data.headroom.saved.toLocaleString()} chars saved` : "no events yet",
+      sub: data.headroom.events ? `${data.headroom.events.toLocaleString()} firings, avg ${headroomPct}% saved` : "fires only when saving > 15%",
+    },
+    {
+      name: "TEA engine",
+      stat: `${data.tea.savedTokens.toLocaleString()} tokens saved (est.)`,
+      sub: `${data.tea.events.toLocaleString()} lifecycle/compress events`,
+    },
+    {
+      name: "Caveman",
+      stat: data.caveman.responses ? `${data.caveman.avgWords} avg words/response` : "no responses logged yet",
+      sub: data.caveman.responses ? `${data.caveman.responses.toLocaleString()} responses, ${data.caveman.totalWords.toLocaleString()} words total` : "no verbose baseline exists — trend only",
+    },
+  ];
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CRISP Dashboard</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --card: #ffffff; --text: #1a1a1a; --muted: #6b7280;
+    --border: #e5e7eb; --track: #eef0f3;
+    --c-rtk: #2563eb; --c-headroom: #16a34a; --c-tea: #9333ea; --c-caveman: #ea580c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181d; --card: #1f2229; --text: #f2f2f2; --muted: #9aa0aa; --border: #2c3038; --track: #2a2d34; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .tile { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .tile .n { font-size: 26px; font-weight: 700; }
+  .tile .l { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
+  .card .stat { font-size: 18px; font-weight: 700; }
+  .card .sub2 { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; overflow-x: auto; }
+  .panel h2 { font-size: 15px; margin: 0 0 16px; }
+  .bar-label { font-size: 12px; fill: var(--text); }
+  .bar-value { font-size: 12px; fill: var(--muted); }
+  .bar-track { fill: var(--track); }
+  footer { color: var(--muted); font-size: 11px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <h1>CRISP Dashboard</h1>
+  <div class="sub">Generated ${esc(data.generatedAt)} · vault: ${esc(data.vaultDir)} · run <code>tea dashboard</code> again to refresh</div>
+
+  <div class="tiles">
+    ${statTiles.map((t) => `<div class="tile"><div class="n">${t.value.toLocaleString()}</div><div class="l">${esc(t.label)}</div></div>`).join("")}
+  </div>
+
+  <div class="cards">
+    ${serviceCards.map((c) => `<div class="card"><h3>${esc(c.name)}</h3><div class="stat">${esc(c.stat)}</div><div class="sub2">${esc(c.sub)}</div></div>`).join("")}
+  </div>
+
+  <div class="panel">
+    <h2>Tokens/chars saved by service</h2>
+    ${services.length ? `<svg viewBox="0 0 640 ${barsHeight}" width="100%" height="${barsHeight}">${bars}</svg>` : `<div class="sub2">No savings data yet — use the tools for a while, then refresh.</div>`}
+  </div>
+
+  <footer>Numbers are what's actually logged locally — nothing here is estimated beyond what each hook itself records. RTK and TEA report tokens; Headroom reports characters (before/pct is measured, not estimated); Caveman has no verbose baseline to diff against, so it's a length trend, not a savings claim.</footer>
+</body>
+</html>`;
+}
+
+function printDashboard(dirArg, outArg, json) {
+  const data = gatherDashboard(dirArg);
+  if (json) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+  const html = renderDashboardHtml(data);
+  const out = path.resolve(outArg || path.join(STATS_DIR, "dashboard.html"));
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, html, "utf8");
+  console.log(`dashboard: ${out}`);
+}
+
 function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -1289,6 +1501,11 @@ function main() {
 
   if (command === "gain") {
     printGain(hasFlag(args, "--json"));
+    return;
+  }
+
+  if (command === "dashboard") {
+    printDashboard(positionalArgs(args.slice(1))[0], argValue(args, "--out", ""), hasFlag(args, "--json"));
     return;
   }
 

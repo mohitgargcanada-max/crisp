@@ -169,6 +169,23 @@ and `tea.js` CLI work fully; the automatic notify→turn-tracking hook
 
 ---
 
+## Dashboard — see what each service is actually saving
+
+```powershell
+node <path-to-crisp>/engine/cli/tea.js dashboard
+```
+
+Generates a self-contained HTML report at `engine/.tea-stats/dashboard.html`
+(pass `--out <file>` for a different path, `--json` for raw data instead of
+HTML) showing, per service: messages sent, commands run, responses logged,
+sessions started, and tokens/characters saved — pulled from what each hook
+actually logs (RTK via `rtk gain -f json`, Headroom's own
+`headroom-savings.jsonl`, TEA's `token-savings.jsonl`, Caveman's
+`response-log.jsonl`). No estimates beyond what each tool already records; if
+a service hasn't fired yet, its card says so instead of showing a fake zero.
+
+---
+
 ## How to verify it's working
 
 **RTK** (after a week of use):
