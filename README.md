@@ -4,6 +4,9 @@
 > One clone, one installer, both hosts — attacks every stage of the AI coding
 > pipeline, not just one end.
 
+New to this? **[EXPLAINED.md](EXPLAINED.md)** covers every concept below in
+plain English with real-world analogies and examples — no jargon assumed.
+
 ---
 
 ## Honest numbers
