@@ -147,7 +147,48 @@ is adding more or less code per commit over time. `tea lean-stats <repo>`
 tracks both — real numbers pulled from git and the code itself, not an
 estimate — and reports them honestly as a trend, not a savings percentage.
 
-**Where:** `claude/skills/lean-code-agent/`.
+**Where:** the ladder itself lives directly in `claude/CLAUDE.md` and
+`codex/AGENTS.md`'s "Code behavior (Lean)" section (not a separate skill file
+— see Karpathy Guidelines just below for the vendored skill covering this
+territory), and `engine/cli/tea.js lean-stats` for the measurement.
+
+---
+
+## Karpathy Guidelines — coding discipline for LLM-specific failure modes
+
+**What it does:** four rules distilled from Andrej Karpathy's observations
+about how LLMs specifically go wrong when writing code — not the same as
+"write bad code" in general, but a particular set of habits: assuming instead
+of asking, over-refactoring adjacent code nobody asked about, and declaring
+"done" without a way to check it.
+
+1. **Think before coding** — state assumptions explicitly, surface confusion,
+   don't silently pick one interpretation among several.
+2. **Simplicity first** — minimum code that solves the actual problem, nothing
+   speculative "just in case."
+3. **Surgical changes** — touch only what the request requires; don't tidy up
+   the neighboring code while you're in there.
+4. **Goal-driven execution** — turn the task into a verifiable check before
+   starting ("write a test that reproduces the bug, then make it pass"),
+   instead of a vague "make it work."
+
+**Analogy:** a surgeon operating on one specific issue doesn't also tidy up an
+unrelated organ while they happen to be in there, and doesn't start cutting
+before confirming exactly what the plan is and how they'll know it worked.
+
+**Example:** asked to "fix the login bug," this discipline turns that into:
+*state the assumption* ("I'm assuming the bug is the expired-token check, not
+the password hash — confirming before I proceed"), *fix only that* (don't also
+reformat the surrounding file), and *define done* ("write a test with an
+expired token, confirm it now fails login correctly, confirm valid tokens
+still pass").
+
+**Where:** `claude/skills/karpathy-guidelines/SKILL.md` — vendored as-is from
+[multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills),
+MIT. This replaced an earlier `lean-code-agent` skill inspired by
+DietrichGebert/ponytail — same general direction (minimal, non-speculative
+code), but Karpathy's framing is sharper about *why LLMs specifically* need
+these guardrails, so it's what CRISP ships now.
 
 ---
 
@@ -291,9 +332,9 @@ notices the word "review" doesn't match any *installed* skill and suggests
 `/install-skill code-review` — the laminated card that isn't on the desk yet.
 
 **Where:** `claude/skills/*/SKILL.md` — six are vendored in this repo
-(token-kit, headroom, context-engineer, agent-orchestration, graphify, lean-code-agent).
-Four more are *recommended companions* the installer checks for but doesn't
-vendor — see "Companion plugins" below.
+(token-kit, headroom, context-engineer, agent-orchestration, graphify,
+karpathy-guidelines). Three more are *recommended companions* the installer
+checks for but doesn't vendor — see "Companion plugins" below.
 
 ---
 
@@ -320,14 +361,13 @@ process — you don't photocopy loose pages out of a course, you enroll in it.
   independently review a PR/diff from different angles (guideline compliance
   ×2, bug detection, git-history context), then a confidence score filters out
   anything under 80% certain, so you don't get buried in nitpicks.
-- **Andrej Karpathy Skills** ([multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)) —
-  four coding-discipline principles aimed specifically at LLM-authored-code
-  failure modes: think before coding, simplicity first, surgical (non-adjacent)
-  changes, goal-driven execution. Overlaps conceptually with `lean-code-agent`
-  but is framed around "why AI assistants specifically get this wrong,"
-  so it's kept separate rather than merged in.
 - **Claude-Mem** — covered above under the memory vault section; the same
   "real plugin, not a file" logic applies to it too.
+
+(Andrej Karpathy's skill isn't in this list even though it's also packaged as
+a plugin upstream — its actual skill content is one self-contained file with
+no cross-references to sibling skills, unlike the three above, so it's
+vendored directly instead — see the Karpathy Guidelines section above.)
 
 ---
 

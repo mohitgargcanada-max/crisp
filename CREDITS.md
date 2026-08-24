@@ -42,15 +42,15 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
   implementation of headroom's compression patterns, no external dependency needed.
   Covers the same gap (JSON, logs, grep, file reads) with a 50-line Python script.
 
-### Lean Code Agent / Ponytail
-- **Author:** [DietrichGebert](https://github.com/DietrichGebert/ponytail) (ponytail)
-  and the Claude Code community (lean-code-agent)
-- **Repo:** github.com/DietrichGebert/ponytail
-- **What they built:** Skill that installs a "lazy senior developer" mindset — 
-  before writing code, checks if it needs to exist, if stdlib covers it, if it's
-  one line. ~54% less code generated. 99k+ stars.
-- **Our contribution:** Integrated as lean-code-agent skill. Added lean-debt marker
-  convention and advisory-mode guardrails.
+### Lean Code Agent / Ponytail — removed 2026-08-23
+- Previously credited to [DietrichGebert](https://github.com/DietrichGebert/ponytail)
+  (ponytail) / the Claude Code community (lean-code-agent). Removed in favor of
+  the Andrej Karpathy Skills below, which cover the same "minimal, non-speculative
+  code" territory with a sharper LLM-specific framing. The lean-debt marker
+  convention and the reuse/stdlib/one-line ladder itself weren't unique to this
+  skill file — they're still enforced directly in `claude/CLAUDE.md` and
+  `codex/AGENTS.md`'s "Code behavior (Lean)" section, and by `tea lean-stats`.
+  Only the standalone third-party-inspired skill file was dropped.
 
 ### Context-Engineer
 - **Author:** Community / assembled by CRISP
@@ -82,17 +82,24 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
   Code. `install.ps1`/`install.sh` just check it's available.
 
 ### Andrej Karpathy Skills
-- **Author:** community-maintained, this project uses the fork at
-  [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)
-- **What it does:** four coding-discipline principles distilled from Karpathy's
-  observations about LLM coding pitfalls — think before coding, simplicity
-  first, surgical (non-adjacent) changes, goal-driven execution with explicit
-  success criteria.
-- **Our contribution:** none — not vendored, it's a real plugin (own
-  `.claude-plugin/` config). `install.ps1`/`install.sh` check for it. Conceptual
-  overlap with `lean-code-agent` (both push toward minimal, non-speculative
-  code) but framed specifically around LLM-authored-code failure modes, so we
-  keep it as a separate recommendation rather than merging the two.
+- **Author:** forrestchang (original), distilled from
+  [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876)
+  on LLM coding pitfalls
+- **Repo used:** [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)
+  (a fork/mirror of forrestchang's original)
+- **What it does:** four coding-discipline principles — think before coding
+  (surface assumptions, don't guess), simplicity first (minimum code, nothing
+  speculative), surgical changes (touch only what you must), goal-driven
+  execution (define verifiable success criteria up front).
+- **License:** MIT, declared in the upstream `.claude-plugin/plugin.json`
+  (the repo itself ships no separate LICENSE file — reproduced at
+  `claude/skills/karpathy-guidelines/LICENSE`).
+- **Our contribution:** none to the content — **vendored as-is**
+  (`claude/skills/karpathy-guidelines/SKILL.md`), unlike Superpowers/Code
+  Review/Claude-Mem above: this is a single self-contained skill with no
+  internal cross-references to sibling skills, so unlike those it copies in
+  safely as a flat file. Replaces the removed `lean-code-agent` skill (see
+  above) — same territory, sharper framing.
 
 ### Graphify
 - **Author:** [Graphify-Labs](https://github.com/Graphify-Labs/graphify)

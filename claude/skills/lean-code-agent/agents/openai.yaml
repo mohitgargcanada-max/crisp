@@ -1,4 +1,0 @@
-name: lean-code-agent
-description: Minimal-code guardrail for coding agents. Prefer skip, reuse, stdlib, native platform, installed dependency, one line, then smallest working version.
-version: 0.1.0
-

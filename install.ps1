@@ -28,7 +28,7 @@ Write-Host "  usage_report.py      -> ~/.claude/hooks/" -ForegroundColor Green
 
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 Write-Host "`nInstalling Claude Code skills..."
-$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','lean-code-agent')
+$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','karpathy-guidelines')
 foreach ($s in $skills) {
     Copy-Item "$CRISP\claude\skills\$s" "$SKILLS\$s" -Recurse -Force
     Write-Host "  $s -> ~/.claude/skills/$s" -ForegroundColor Green
@@ -150,9 +150,7 @@ $companionPlugins = @(
     @{ Key = "superpowers@"; Name = "superpowers"; Marketplace = "obra/superpowers-marketplace"; Install = "superpowers@claude-plugins-official"
        Note = "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute" },
     @{ Key = "code-review@"; Name = "code-review"; Marketplace = ""; Install = ""
-       Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" },
-    @{ Key = "andrej-karpathy-skills@"; Name = "andrej-karpathy-skills"; Marketplace = "multica-ai/andrej-karpathy-skills"; Install = "andrej-karpathy-skills@karpathy-skills"
-       Note = "simplicity/surgical-change coding guidelines — verify the exact marketplace/install name against the repo's own README, naming has drifted across forks" }
+       Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" }
 )
 
 foreach ($p in $companionPlugins) {

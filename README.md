@@ -119,7 +119,7 @@ crisp/
 │       ├── context-engineer/   # Session + CLAUDE.md optimization
 │       ├── agent-orchestration/ # CRISP's own short fan-out/pipeline/handoff cheatsheet
 │       ├── graphify/           # Vendored as-is (MIT, see LICENSE inside)
-│       └── lean-code-agent/    # "Lazy senior developer" code-minimalism skill
+│       └── karpathy-guidelines/ # LLM-coding-discipline principles (vendored, MIT)
 ├── codex/
 │   └── AGENTS.md               # Same pipeline for Codex — real wiring, see below
 ├── engine/                    # ex-token-efficient-agent-kit, merged in whole
@@ -156,13 +156,16 @@ Install RTK separately (it's a binary, not vendored):
 cargo install rtk
 ```
 
-Everything else that isn't vendored (claude-mem, superpowers, Anthropic's
-code-review plugin, andrej-karpathy-skills) is a real Claude Code *plugin* —
-namespaced skills and/or its own hooks, so copying files in flat would break
-it. `install.ps1`/`install.sh` check whether each is installed and print the
-exact `/plugin marketplace add` + `/plugin install` command for any that
-aren't — see [EXPLAINED.md](EXPLAINED.md#companion-plugins--recommended-not-included)
-for what each one actually does and why it's a companion, not a vendored file.
+Three more things (claude-mem, superpowers, Anthropic's code-review plugin)
+are real Claude Code *plugins* — namespaced skills and/or their own hooks, so
+copying files in flat would break them. `install.ps1`/`install.sh` check
+whether each is installed and print the exact `/plugin marketplace add` +
+`/plugin install` command for any that aren't — see
+[EXPLAINED.md](EXPLAINED.md#companion-plugins--recommended-not-included) for
+what each one does and why it's a companion, not a vendored file. (Andrej
+Karpathy's skill is *not* in this list — it's a single self-contained skill
+with no cross-references, so it's vendored directly instead, replacing the
+old `lean-code-agent`.)
 
 ## Quick start — Mac/Linux
 

@@ -30,7 +30,7 @@ echo "  ✓ usage_report.py      -> ~/.claude/hooks/"
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 echo ""
 echo "Installing Claude Code skills..."
-for skill in token-kit headroom context-engineer agent-orchestration graphify lean-code-agent; do
+for skill in token-kit headroom context-engineer agent-orchestration graphify karpathy-guidelines; do
   cp -r "$CRISP/claude/skills/$skill" "$SKILLS/"
   echo "  ✓ $skill -> ~/.claude/skills/$skill"
 done
@@ -146,8 +146,6 @@ check_companion_plugin "superpowers@" "superpowers" "obra/superpowers-marketplac
   "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute"
 check_companion_plugin "code-review@" "code-review" "" "" \
   "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed"
-check_companion_plugin "andrej-karpathy-skills@" "andrej-karpathy-skills" "multica-ai/andrej-karpathy-skills" "andrej-karpathy-skills@karpathy-skills" \
-  "simplicity/surgical-change coding guidelines — verify the exact marketplace/install name against the repo's own README, naming has drifted across forks"
 
 echo ""
 echo "Done."
