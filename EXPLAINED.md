@@ -291,7 +291,43 @@ notices the word "review" doesn't match any *installed* skill and suggests
 `/install-skill code-review` — the laminated card that isn't on the desk yet.
 
 **Where:** `claude/skills/*/SKILL.md` — six are vendored in this repo
-(token-kit, headroom, context-engineer, superpowers, graphify, lean-code-agent).
+(token-kit, headroom, context-engineer, agent-orchestration, graphify, lean-code-agent).
+Four more are *recommended companions* the installer checks for but doesn't
+vendor — see "Companion plugins" below.
+
+---
+
+## Companion plugins — recommended, not included
+
+Some things aren't a "skill" (a laminated card) at all — they're a full
+**plugin**: several skills that reference each other by name, plus their own
+hooks. Copying a plugin's files in flat would break both the cross-references
+and the hooks, so CRISP doesn't vendor these — `install.ps1`/`install.sh` just
+check whether each is installed and print the install command if not.
+
+**Analogy:** a laminated card is one page you can photocopy freely. A plugin
+is more like an entire employee training *course* with its own binder,
+cross-referenced modules ("see Module 4"), and its own separate orientation
+process — you don't photocopy loose pages out of a course, you enroll in it.
+
+- **Superpowers** ([obra/superpowers](https://github.com/obra/superpowers)) —
+  the real, much bigger version of the idea behind CRISP's own
+  `agent-orchestration` skill: 14 skills covering brainstorming, planning,
+  subagent-driven TDD, systematic debugging, and code review, wired together
+  by name (`superpowers:brainstorming`, etc.). CRISP's own skill is a small
+  cheatsheet on a narrow slice of the same idea — not a substitute.
+- **Code Review** (Anthropic's own, ships with Claude Code) — four agents
+  independently review a PR/diff from different angles (guideline compliance
+  ×2, bug detection, git-history context), then a confidence score filters out
+  anything under 80% certain, so you don't get buried in nitpicks.
+- **Andrej Karpathy Skills** ([multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills)) —
+  four coding-discipline principles aimed specifically at LLM-authored-code
+  failure modes: think before coding, simplicity first, surgical (non-adjacent)
+  changes, goal-driven execution. Overlaps conceptually with `lean-code-agent`
+  but is framed around "why AI assistants specifically get this wrong,"
+  so it's kept separate rather than merged in.
+- **Claude-Mem** — covered above under the memory vault section; the same
+  "real plugin, not a file" logic applies to it too.
 
 ---
 

@@ -117,7 +117,7 @@ crisp/
 │       ├── token-kit/          # Unified: caveman + TEA + RTK behavior
 │       ├── headroom/           # Tool output compression patterns
 │       ├── context-engineer/   # Session + CLAUDE.md optimization
-│       ├── superpowers/        # Multi-agent orchestration patterns
+│       ├── agent-orchestration/ # CRISP's own short fan-out/pipeline/handoff cheatsheet
 │       ├── graphify/           # Vendored as-is (MIT, see LICENSE inside)
 │       └── lean-code-agent/    # "Lazy senior developer" code-minimalism skill
 ├── codex/
@@ -156,14 +156,13 @@ Install RTK separately (it's a binary, not vendored):
 cargo install rtk
 ```
 
-Install claude-mem separately (it's a live plugin with its own database):
-```
-/plugin marketplace add thedotmack/claude-mem
-/plugin install claude-mem@thedotmack
-```
-
-Both checks run automatically at the end of `install.ps1`/`install.sh` and tell
-you if either is missing.
+Everything else that isn't vendored (claude-mem, superpowers, Anthropic's
+code-review plugin, andrej-karpathy-skills) is a real Claude Code *plugin* —
+namespaced skills and/or its own hooks, so copying files in flat would break
+it. `install.ps1`/`install.sh` check whether each is installed and print the
+exact `/plugin marketplace add` + `/plugin install` command for any that
+aren't — see [EXPLAINED.md](EXPLAINED.md#companion-plugins--recommended-not-included)
+for what each one actually does and why it's a companion, not a vendored file.
 
 ## Quick start — Mac/Linux
 

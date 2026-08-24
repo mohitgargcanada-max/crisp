@@ -28,7 +28,7 @@ Write-Host "  usage_report.py      -> ~/.claude/hooks/" -ForegroundColor Green
 
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 Write-Host "`nInstalling Claude Code skills..."
-$skills = @('token-kit','headroom','context-engineer','superpowers','graphify','lean-code-agent')
+$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','lean-code-agent')
 foreach ($s in $skills) {
     Copy-Item "$CRISP\claude\skills\$s" "$SKILLS\$s" -Recurse -Force
     Write-Host "  $s -> ~/.claude/skills/$s" -ForegroundColor Green
@@ -137,16 +137,37 @@ if ($rtk) {
     Write-Host "    (requires Rust: https://rustup.rs)" -ForegroundColor White
 }
 
-# 9. Check claude-mem (installed via plugin marketplace — not vendored)
-Write-Host "`nChecking claude-mem..."
+# 9. Check companion plugins — real Claude Code plugins (namespaced skills,
+#    their own hooks) that CRISP recommends but never vendors, since copying
+#    their files in flat would break internal cross-references and hook wiring.
+Write-Host "`nChecking companion plugins..."
 $installedPlugins = "$CLAUDE\plugins\installed_plugins.json"
-$hasClaudeMem = (Test-Path $installedPlugins) -and ((Get-Content $installedPlugins -Raw) -match '"claude-mem@')
-if ($hasClaudeMem) {
-    Write-Host "  claude-mem plugin found" -ForegroundColor Green
-} else {
-    Write-Host "  claude-mem not found. Install it from the plugin marketplace:" -ForegroundColor Yellow
-    Write-Host "    /plugin marketplace add thedotmack/claude-mem" -ForegroundColor White
-    Write-Host "    /plugin install claude-mem@thedotmack" -ForegroundColor White
+$installedPluginsText = if (Test-Path $installedPlugins) { Get-Content $installedPlugins -Raw } else { "" }
+
+$companionPlugins = @(
+    @{ Key = "claude-mem@"; Name = "claude-mem"; Marketplace = "thedotmack/claude-mem"; Install = "claude-mem@thedotmack"
+       Note = "persistent semantic memory across sessions" },
+    @{ Key = "superpowers@"; Name = "superpowers"; Marketplace = "obra/superpowers-marketplace"; Install = "superpowers@claude-plugins-official"
+       Note = "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute" },
+    @{ Key = "code-review@"; Name = "code-review"; Marketplace = ""; Install = ""
+       Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" },
+    @{ Key = "andrej-karpathy-skills@"; Name = "andrej-karpathy-skills"; Marketplace = "multica-ai/andrej-karpathy-skills"; Install = "andrej-karpathy-skills@karpathy-skills"
+       Note = "simplicity/surgical-change coding guidelines — verify the exact marketplace/install name against the repo's own README, naming has drifted across forks" }
+)
+
+foreach ($p in $companionPlugins) {
+    $found = $installedPluginsText -match [regex]::Escape('"' + $p.Key)
+    if ($found) {
+        Write-Host "  $($p.Name) found" -ForegroundColor Green
+    } else {
+        Write-Host "  $($p.Name) not found — $($p.Note)" -ForegroundColor Yellow
+        if ($p.Marketplace) {
+            Write-Host "    /plugin marketplace add $($p.Marketplace)" -ForegroundColor White
+            Write-Host "    /plugin install $($p.Install)" -ForegroundColor White
+        } else {
+            Write-Host "    check the /plugin menu in Claude Code" -ForegroundColor White
+        }
+    }
 }
 
 Write-Host "`nDone." -ForegroundColor Cyan

@@ -1,13 +1,22 @@
 ---
-name: superpowers
+name: agent-orchestration
 description: >
   Orchestration primitives for multi-agent and parallel workflows in Claude Code.
   Use when spawning subagents, running parallel tasks, coordinating multi-step pipelines,
   or building agent-to-agent handoffs. Triggers on: "fan out", "parallel agents",
-  "subagent", "orchestrate", "pipeline", "multi-step workflow", /superpowers.
+  "subagent", "orchestrate", "pipeline", "multi-step workflow".
 ---
 
-# Superpowers — Orchestration Primitives
+# Agent Orchestration — CRISP's own cheatsheet
+
+> This is CRISP's own short, independently-written set of orchestration
+> patterns — it is NOT a copy of, or derived from, obra/superpowers. If you
+> want the real superpowers plugin (a much larger methodology: brainstorming,
+> planning, subagent-driven TDD, systematic debugging, code review, and more,
+> 14 skills total), install it separately — `install.ps1`/`install.sh` check
+> for it and print the install command. See THIRD_PARTY_NOTICES.md.
+
+## Core patterns
 
 ## Core patterns
 

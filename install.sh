@@ -30,7 +30,7 @@ echo "  ✓ usage_report.py      -> ~/.claude/hooks/"
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 echo ""
 echo "Installing Claude Code skills..."
-for skill in token-kit headroom context-engineer superpowers graphify lean-code-agent; do
+for skill in token-kit headroom context-engineer agent-orchestration graphify lean-code-agent; do
   cp -r "$CRISP/claude/skills/$skill" "$SKILLS/"
   echo "  ✓ $skill -> ~/.claude/skills/$skill"
 done
@@ -116,17 +116,38 @@ else
   echo "    cargo install rtk   (requires Rust: https://rustup.rs)"
 fi
 
-# 9. Check claude-mem (installed via plugin marketplace — not vendored)
+# 9. Check companion plugins — real Claude Code plugins (namespaced skills,
+#    their own hooks) that CRISP recommends but never vendors, since copying
+#    their files in flat would break internal cross-references and hook wiring.
 echo ""
-echo "Checking claude-mem..."
+echo "Checking companion plugins..."
 INSTALLED_PLUGINS="$CLAUDE/plugins/installed_plugins.json"
-if [ -f "$INSTALLED_PLUGINS" ] && grep -q '"claude-mem@' "$INSTALLED_PLUGINS" 2>/dev/null; then
-  echo "  ✓ claude-mem plugin found"
-else
-  echo "  claude-mem not found. Install it from the plugin marketplace:"
-  echo "    /plugin marketplace add thedotmack/claude-mem"
-  echo "    /plugin install claude-mem@thedotmack"
-fi
+INSTALLED_PLUGINS_TEXT=""
+[ -f "$INSTALLED_PLUGINS" ] && INSTALLED_PLUGINS_TEXT="$(cat "$INSTALLED_PLUGINS")"
+
+check_companion_plugin() {
+  local key="$1" name="$2" marketplace="$3" install="$4" note="$5"
+  if echo "$INSTALLED_PLUGINS_TEXT" | grep -qF "\"${key}"; then
+    echo "  ✓ $name found"
+  else
+    echo "  $name not found — $note"
+    if [ -n "$marketplace" ]; then
+      echo "    /plugin marketplace add $marketplace"
+      echo "    /plugin install $install"
+    else
+      echo "    check the /plugin menu in Claude Code"
+    fi
+  fi
+}
+
+check_companion_plugin "claude-mem@" "claude-mem" "thedotmack/claude-mem" "claude-mem@thedotmack" \
+  "persistent semantic memory across sessions"
+check_companion_plugin "superpowers@" "superpowers" "obra/superpowers-marketplace" "superpowers@claude-plugins-official" \
+  "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute"
+check_companion_plugin "code-review@" "code-review" "" "" \
+  "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed"
+check_companion_plugin "andrej-karpathy-skills@" "andrej-karpathy-skills" "multica-ai/andrej-karpathy-skills" "andrej-karpathy-skills@karpathy-skills" \
+  "simplicity/surgical-change coding guidelines — verify the exact marketplace/install name against the repo's own README, naming has drifted across forks"
 
 echo ""
 echo "Done."
