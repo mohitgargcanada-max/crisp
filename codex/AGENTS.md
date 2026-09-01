@@ -52,6 +52,60 @@ source files. Only read raw files to edit specific lines.
 3. Secrets via env only. Never hardcode API keys, tokens, passwords.
 4. Token-efficient always. Root cause in one line. Tables not prose.
 5. Session rollover at 10–12 turns. Write compact handoff, suggest fresh session.
+6. Audit before building. Before adding anything new — a file, a tracker, a
+   system — check whether it already exists in the project or the toolkit and
+   reuse it. Don't build a second version of something that already does the job.
+7. Cite sources, don't fabricate. When quoting a number, spec, or claim from a
+   file/URL/tool result, say where it came from. If unsure, say so — never guess
+   and present it as fact.
+8. No slop in sub-instructions. If dispatching work to another process or
+   agent, brief it like a colleague who knows nothing of this session — file
+   paths, concrete context, what's already ruled out.
+
+## Project Ledgers — bugs & mistakes (per-project, not memory-vault)
+
+Two plain files live inside each project's own repo — NOT in `memory-vault`,
+specifically so they survive `memory-refresh prune` and persist for the life
+of the project instead of a session:
+
+- **`.crisp/BUGS.md`** — every real bug found and fixed. One entry: date,
+  symptom, root cause, fix (commit hash if committed), status.
+- **`.crisp/MISTAKES.md`** — lessons from actual mistakes (mine, or the user's
+  correction of mine). One entry: date, what happened, why it was wrong, what
+  to do differently.
+
+Codex has no Stop hook to auto-scan a transcript the way Claude Code does, so
+this is a direct instruction rather than automation: when you recognize you
+made a mistake, or find and fix a real bug, append the entry yourself before
+moving on — don't wait to be asked. Both files are created on first use,
+ordinary markdown, git-tracked like any other project file.
+
+## Commit & PR Discipline (no new tracker — `gh` already is one)
+
+No separate PR-tracking system: `gh pr list`/`gh pr view` already shows every
+open PR, `gh issue list` already shows every open bug worth formally tracking.
+
+- Every commit message explains **why**, not just what.
+- Every PR description explains why this change, links the issue it closes
+  (`Closes #N`) if one exists, and states how it was verified.
+- A bug worth a formal `gh issue` (vs. just a `.crisp/BUGS.md` line) is one
+  that needs to be tracked, assigned, or referenced across multiple PRs.
+
+## Task Routing Heuristic (judgment, not automation)
+
+A decision rubric applied by judgment — no cost telemetry wired in to make it
+mechanical.
+
+- Independent subtasks, no shared state → parallel. Stage 2 needs stage 1's
+  output → sequential.
+- Open-ended search, audits, anything that would bloat this session's context
+  → delegate and keep only the summary. A known file with a specific edit →
+  inline.
+- Default to the session's model/effort; reserve a higher tier for genuinely
+  hard judgment calls, not routine work.
+- A second independent verification pass earns its cost for destructive
+  operations, security-sensitive code, or anything hard to reverse — not for
+  exploratory or low-stakes work.
 
 <!-- CRISP:AUTOMATION_SNIPPET:START -->
 <!-- Content below is copied verbatim from engine/adapters/codex/AUTOMATION_AGENTS_SNIPPET.md
