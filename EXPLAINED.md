@@ -302,11 +302,17 @@ first time — the next session can't feel the weight of "we agreed on this
 already," so the same mistake can quietly repeat. To close that gap,
 `auto_handover.py` uses Claude Code's actual Stop-hook blocking mechanism: if
 `.crisp/MISTAKES.md` has entries, the *first* time I try to finish a response
-gets blocked, and I'm handed the 5 most recent logged mistakes to check my
-change against before I'm allowed to actually stop. It only blocks once per
-turn (checks Claude Code's own `stop_hook_active` signal so it can't loop),
-and only shows the most recent 5 — not the whole file — so the check stays
-small and current no matter how long the ledger grows.
+gets blocked, and I'm handed up to 5 mistakes to check my change against
+before I'm allowed to actually stop. It only blocks once per turn (checks
+Claude Code's own `stop_hook_active` signal so it can't loop).
+
+Those 5 are chosen by **relevance, not recency** — the first version just
+took the 5 newest entries, but a three-month-old mistake about a file being
+edited *right now* is exactly as worth catching as yesterday's. It checks
+which files got touched this turn and surfaces any mistake mentioning them,
+regardless of age, falling back to the 5 most recent only when nothing
+matches yet. Small known gap: it matches on filename, not on the concept
+inside the mistake — good enough to be useful, not a full semantic search.
 
 **Analogy:** it's the difference between a sign on the wall saying "wash your
 hands" (easy to walk past without reading) and someone at the door who

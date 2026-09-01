@@ -34,8 +34,13 @@ MISTAKE_PATTERNS = [
 
 ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
 
-def _read_transcript(transcript_path: str) -> list[dict]:
+def _read_transcript(transcript_path: str):
+    """Returns (recent_messages, touched_files). touched_files are basenames
+    pulled from Edit/Write/Read tool_use inputs in the transcript — used to
+    rank mistake-ledger relevance by what's actually being worked on this
+    turn, not just by recency."""
     msgs = []
+    files = set()
     try:
         for line in Path(transcript_path).read_text(errors="ignore").splitlines():
             try:
@@ -45,14 +50,25 @@ def _read_transcript(transcript_path: str) -> list[dict]:
                 if role not in ("user","assistant"): continue
                 content = msg.get("content","")
                 if isinstance(content, list):
-                    text = " ".join(c.get("text","") for c in content if isinstance(c,dict) and c.get("type")=="text")
+                    texts = []
+                    for c in content:
+                        if not isinstance(c, dict): continue
+                        if c.get("type") == "text":
+                            texts.append(c.get("text",""))
+                        elif c.get("type") == "tool_use":
+                            inp = c.get("input", {}) or {}
+                            for key in ("file_path", "path", "notebook_path"):
+                                val = inp.get(key)
+                                if isinstance(val, str) and val:
+                                    files.add(Path(val).name.lower())
+                    text = " ".join(texts)
                 else:
                     text = str(content)
                 text = text.strip()
                 if text: msgs.append({"role":role,"text":text})
             except: pass
     except: pass
-    return msgs[-20:]
+    return msgs[-20:], files
 
 def _categorize(msgs):
     found = {"feedback":[],"project":[],"user":[]}
@@ -96,10 +112,19 @@ def _save_mistakes(session_id, cwd, mistakes):
     for item in mistakes: lines.append(f"- {item}\n")
     with open(ledger,"a",encoding="utf-8") as f: f.writelines(lines)
 
-def _recent_mistakes(cwd, limit=5):
-    """Last N bullet entries from .crisp/MISTAKES.md — bounded so the review
-    checklist stays small regardless of how long the ledger grows. This is
-    NOT the full historical log; see crisp/claude/CLAUDE.md "Project Ledgers"."""
+def _relevant_mistakes(cwd, touched_files, limit=5):
+    """Bullet entries from .crisp/MISTAKES.md, ranked by relevance to files
+    touched this turn — not pure recency. Recency is a weak proxy: a mistake
+    logged 3 months ago about auth.py is exactly as relevant today as one
+    from yesterday, if auth.py is what's being touched right now. Falls back
+    to the most recent entries only when nothing matches (no touched files
+    detected, or no ledger entry mentions them) or when the ledger is new.
+    Always capped at `limit`, regardless of how long the ledger grows.
+
+    Known limit: matches on file basename only (e.g. "auth.py"), not on
+    function/concept names mentioned in the mistake text — a real relevance
+    gap, but a cheap, honest improvement over pure recency without needing
+    semantic search."""
     ledger = _project_ledger_path(cwd)
     if not ledger.exists(): return []
     try:
@@ -107,17 +132,22 @@ def _recent_mistakes(cwd, limit=5):
     except Exception:
         return []
     bullets = [l[2:].strip() for l in lines if l.startswith("- ")]
+    if not bullets: return []
+
+    matched = [b for b in bullets if touched_files and any(f in b.lower() for f in touched_files)]
+    if matched:
+        return matched[-limit:]
     return bullets[-limit:]
 
-def _review_gate(cwd, stop_hook_active):
+def _review_gate(cwd, stop_hook_active, touched_files):
     """Block the Stop event once (per Claude Code's Stop-hook schema:
     https://code.claude.com/docs/en/hooks.md) so the model reviews its own
-    change against recent project mistakes before actually finishing.
+    change against relevant project mistakes before actually finishing.
     stop_hook_active=True means this already fired once this turn — never
     block twice in a row, both to respect Claude Code's own loop guard and
     because the review has already happened once."""
     if stop_hook_active: return None
-    recent = _recent_mistakes(cwd)
+    recent = _relevant_mistakes(cwd, touched_files)
     if not recent: return None
     checklist = "\n".join(f"- {m}" for m in recent)
     return {
@@ -158,13 +188,13 @@ def main():
     cwd = event.get("cwd", os.getcwd())
     transcript_path = event.get("transcript_path") or event.get("transcriptPath","")
 
-    msgs = _read_transcript(transcript_path) if transcript_path else []
+    msgs, touched_files = _read_transcript(transcript_path) if transcript_path else ([], set())
     found = _categorize(msgs)
     _save_staging(session_id, cwd, found)
     mistakes = _scan_mistakes(msgs)
     _save_mistakes(session_id, cwd, mistakes)
 
-    gate = _review_gate(cwd, bool(event.get("stop_hook_active")))
+    gate = _review_gate(cwd, bool(event.get("stop_hook_active")), touched_files)
     if gate:
         print(json.dumps(gate))
 

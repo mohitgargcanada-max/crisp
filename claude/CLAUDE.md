@@ -149,10 +149,17 @@ written. On `Stop`, if the project's ledger has entries, `auto_handover.py`
 blocks the *first* stop attempt (Claude Code's real Stop-hook blocking
 mechanism — `permissionDecision: "deny"`, see
 [hooks reference](https://code.claude.com/docs/en/hooks.md)) and hands back
-the 5 most recent entries to check the current change against, before
-allowing the response to actually finish. It checks `stop_hook_active` so it
-only blocks once per turn, never loops. A written rule only works the first
-time it's read; a blocking hook can't be silently skipped the second time.
+up to 5 entries to check the current change against, before allowing the
+response to actually finish. It checks `stop_hook_active` so it only blocks
+once per turn, never loops. A written rule only works the first time it's
+read; a blocking hook can't be silently skipped the second time.
+
+Entries are picked by **relevance to files touched this turn, not recency** —
+a mistake logged months ago about `auth.py` surfaces just as readily as one
+from yesterday if `auth.py` is what's being edited right now. Falls back to
+the 5 most recent entries only when nothing matches (or nothing was touched
+yet). Known limit: matches on file basename only, not on function/concept
+names mentioned in the mistake text — cheap and honest, not semantic search.
 
 ## Commit & PR Discipline (no new tracker — `gh` already is one)
 
