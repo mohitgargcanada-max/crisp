@@ -63,7 +63,20 @@ At session END (when writing handover): promote staged candidates from
 
 ## Context Compression
 
-Auto-compact at 50% context capacity (set via `compactThreshold: 0.5` in settings.json).
+`compactThreshold` in settings.json is **not a real Claude Code key** — verified
+2026-08-31 (see [settings reference](https://code.claude.com/docs/en/settings-reference),
+[context window](https://code.claude.com/docs/en/context-window)) and removed
+from this repo's `settings.json`; it silently did nothing regardless of value.
+
+The real controls:
+- `autoCompactEnabled` (settings.json) — turn auto-compact on/off.
+- `autoCompactWindow` (settings.json) — an **absolute token count** (100,000–1,000,000),
+  not a percentage.
+- `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (**environment variable**, not settings.json) —
+  the actual way to set a percentage-based threshold (e.g. compact at 65% full);
+  applies to subagents too. Overridden by Claude Code on the web in cloud
+  sessions — only takes effect in local/CLI sessions.
+
 When context is compressed, preserve: active task state, key decisions, exact file paths,
 error strings, tickers/IDs, and any user-stated constraints. Drop: resolved reasoning,
 superseded plans, verbose tool outputs already acted on.
@@ -93,25 +106,6 @@ Applies to subagents too — include graphify-first rule in every subagent promp
 
 ## Universal Engineering Rules
 
-1. **Diagnostics ≠ fixes.** Never auto-fix from diagnostic output. Print findings, wait for explicit fix instruction.
-2. **Docs/spec/journal = part of done.** Any behavioral/concept change updates relevant doc in same session.
-3. **Secrets via env/vault only.** No hardcoding. No `os.getenv` when vault exists.
-4. **Token-efficient always.** Root cause one line. Tables not prose. No preamble. No verbose tracebacks.
-5. **Session rollover at 8-10 turns.** Handoff to memory vault, suggest fresh chat.
-
-See `~/.claude/hooks-registry.md` for hook implementations.
-
-## Graphify First (all projects)
-
-If `graphify-out/graph.json` exists in the working directory, you MUST run graphify before reading source files:
-- `graphify query "<question>"` — scoped subgraph for a topic
-- `graphify explain "<concept>"` — focused concept explanation
-- `graphify path "<A>" "<B>"` — relationship between two nodes
-
-Only read raw files after graphify has oriented you, or when editing/debugging specific lines. This applies to subagents too — include the graphify-first rule in every subagent prompt involving code exploration. Saves significant tokens on any graphified codebase.
-
-## Universal Engineering Rules
-
 These apply to every project, every session:
 
 1. **Diagnostics and fixes are separate tasks.** Never auto-fix based on diagnostic output. Print findings, wait for explicit fix instruction.
@@ -119,5 +113,71 @@ These apply to every project, every session:
 3. **Secrets via env/vault only.** Never hardcode API keys, tokens, or passwords. No `os.getenv` as a fallback when a vault exists.
 4. **Token-efficient responses always.** Root cause in one line. Tables not prose. No "here's what I found" preamble. No verbose tracebacks.
 5. **Session rollover enforced.** At ~10-12 turns write a compact handoff to memory vault and suggest fresh chat.
+6. **Audit before building.** Before adding anything new — a file, a hook, a tracker, a system — check whether it already exists somewhere in the project or the toolkit and reuse it. Don't build a second version of something that already does the job (this is exactly how CRISP ended up with three overlapping memory systems before the 2026-08-22 consolidation — don't repeat it).
+7. **Cite sources, don't fabricate.** When quoting a number, a spec, or a claim from a file/URL/tool result, say where it came from. If you don't know, say so — never guess and present it as fact.
+8. **No slop in subagent/tool prompts.** When dispatching an Agent, a Task, or any sub-instruction, write it like briefing a colleague who knows nothing of this conversation — file paths, concrete context, what's already ruled out. A vague prompt produces vague, generic work; that's wasted tokens on both ends.
 
 See `~/.claude/hooks-registry.md` for the hook implementations that enforce these rules.
+
+## Project Ledgers — bugs & mistakes (per-project, not memory-vault)
+
+Two plain files live inside each project's own repo — NOT in the memory-vault,
+specifically so they survive `memory-refresh prune` and persist for the life of
+the project instead of a session:
+
+- **`.crisp/BUGS.md`** — every real bug found and fixed. One entry: date,
+  symptom, root cause, fix (commit hash if committed), status.
+- **`.crisp/MISTAKES.md`** — lessons from actual mistakes (mine or the user's
+  correction of mine). One entry: date, what happened, why it was wrong, what
+  to do differently. This is what lets a *future* session learn from a mistake
+  a *past* session already made in this same project.
+
+Both are created on first use (git-tracked, ordinary markdown — no new tooling
+to install). `auto_handover.py` auto-detects mistake-admission language
+("I made a mistake", "that was wrong", "should have", root-cause phrasing) and
+appends a draft entry to `.crisp/MISTAKES.md` automatically; review/edit is
+still yours. `.crisp/BUGS.md` entries are written deliberately, by me, when I
+actually find and fix a real bug — not regex-detected, since "bug" doesn't
+have a reliable text pattern the way a mistake-admission does.
+
+These are separate from the memory-vault's own `feedback`/`project`/`user`
+categories above — those stay in the global, prunable memory vault; bugs and
+mistakes stay local to the project, permanently.
+
+## Commit & PR Discipline (no new tracker — `gh` already is one)
+
+No separate PR-tracking system: `gh pr list`/`gh pr view` already shows every
+open PR, and `gh issue list` already shows every open bug worth formally
+tracking. The discipline, not new software, is what was missing:
+
+- Every commit message explains **why**, not just what — the diff already
+  shows what changed; the message's job is the part the diff can't show.
+- Every PR description explains why this change, links the issue it closes
+  (`Closes #N`) if one exists, and states how it was verified.
+- A bug worth a formal `gh issue` (vs. just a `.crisp/BUGS.md` line) is one
+  that needs to be tracked, assigned, or referenced across multiple PRs —
+  file one via `gh issue create` and reference its number in `BUGS.md`
+  instead of duplicating detail in both places.
+
+## Task Routing Heuristic (judgment, not automation)
+
+This is a decision rubric I apply by judgment — there's no cost telemetry
+wired in yet to make it mechanical, unlike RTK/Headroom which are real code.
+
+- **Parallel vs. sequential:** independent subtasks with no shared state →
+  parallel (fan out in one message). Stage 2 needs stage 1's output → sequential.
+- **Subagent vs. inline:** open-ended search (10+ files), audits, or anything
+  that would bloat the main conversation's context → delegate to a subagent
+  and keep only its summary. A known file with a specific edit → inline,
+  a subagent round-trip would cost more than it saves.
+- **Model/effort tier:** default to inheriting the session's model and effort
+  — that's usually right. Override to a cheaper/faster tier only for
+  mechanical, low-judgment work (file listing, formatting checks, simple
+  greps). Reserve higher effort for genuinely hard judgment calls
+  (architecture decisions, ambiguous debugging, adversarial verification of a
+  risky change) — not for routine work.
+- **Verify redundantly only when it matters:** a second independent check
+  (adversarial verify, a different reviewer angle) earns its cost for
+  destructive operations, security-sensitive code, or anything hard to
+  reverse. For exploratory or low-stakes work, one careful pass is enough —
+  redundant verification there is pure cost with no real safety gain.

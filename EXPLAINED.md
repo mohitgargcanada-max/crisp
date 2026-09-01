@@ -269,6 +269,55 @@ in `server.js`, root cause found, fix not yet applied."*
 
 ---
 
+## Project ledgers — the notebook that stays with the project, not the assistant
+
+**What it is:** two plain markdown files, `.crisp/BUGS.md` and
+`.crisp/MISTAKES.md`, that live *inside each project's own repo* — not in the
+memory-vault. That's the key difference from everything above: the memory
+vault gets cleaned out periodically (it's meant to be pruned, see "Memory
+cleanup" earlier); these two files are meant to last for the entire life of
+the project, the same way `README.md` does.
+
+**Analogy:** the memory vault is like a substitute teacher's personal
+notebook — useful, but it's *their* notebook, and it gets cleared out between
+jobs. The project ledger is more like the classroom's own logbook that stays
+bolted to the wall regardless of which teacher is in the room this week —
+every incident that happened in *this room* is in it, permanently.
+
+**Example:** if a session admits "I made a mistake assuming the token never
+expires — root cause was a missing refresh check," that line gets
+automatically drafted into `.crisp/MISTAKES.md` right then. Six weeks and a
+dozen sessions later, a completely different conversation about a similar bug
+can find that exact lesson already sitting in the project, instead of making
+the same mistake twice because nobody remembered.
+
+**Where:** `.crisp/MISTAKES.md` auto-drafts from `claude/hooks/auto_handover.py`
+(it now scans for mistake-admission language, not just user feedback).
+`.crisp/BUGS.md` is written deliberately, not auto-detected — I add an entry
+whenever I actually find and fix a real bug, since "this was a bug" doesn't
+have a reliable text pattern the way "I made a mistake" does.
+
+---
+
+## No new PR tracker — `gh` already is one
+
+**What changed:** CRISP doesn't ship a PR-tracking tool, and deliberately
+didn't build one. `gh pr list` and `gh issue list` already show every open PR
+and bug worth formally tracking — the actual gap was never "no software,"
+it was **discipline**: commit messages that only say *what* changed, PRs with
+no link back to the issue they close.
+
+**Analogy:** you don't need a second filing cabinet if the first one is fine
+and just needs someone to actually put things in the right folder.
+
+**Example:** instead of a `.crisp/PR_TRACKER.md` duplicating what GitHub
+already tracks, the rule is simpler — every commit message explains *why*,
+every PR links `Closes #N` when a tracked issue exists, and a bug only
+graduates from a `.crisp/BUGS.md` line to a formal `gh issue` once it needs to
+be assigned or referenced across more than one PR.
+
+---
+
 ## Hooks — the nervous system connecting all of this
 
 **What they are:** a "hook" is just "run this small script automatically when

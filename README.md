@@ -61,6 +61,27 @@ They're one repo now:
   text into feedback/project/user candidates for Claude Code's own memory files.
 - **`agent-memory-vault`** is retired — folded into `engine/memory-vault/`.
 
+### 2026-08-31 — project ledgers, no new PR tracker
+
+- Added `.crisp/BUGS.md` and `.crisp/MISTAKES.md` — per-project (not
+  memory-vault) files that persist for the life of the project instead of
+  being subject to memory-vault pruning. `auto_handover.py` now auto-drafts
+  mistake entries from mistake-admission language in the transcript.
+- Deliberately did **not** build a PR/bug-tracker system — `gh pr`/`gh issue`
+  already are one. Added a discipline rule instead (commit messages explain
+  why, PRs link the issue they close) rather than a new tool.
+- Added a written task-routing heuristic to `claude/CLAUDE.md` (parallel vs.
+  sequential, when to use a subagent, model/effort tiering) — judgment
+  guidance, not automation; there's no cost telemetry behind it yet.
+- **Bugfix:** `compactThreshold` (in `claude/settings.json` and referenced in
+  `claude/CLAUDE.md`/`context-engineer/SKILL.md`) is not a real Claude Code
+  setting — verified against
+  [official docs](https://code.claude.com/docs/en/settings-reference), it
+  silently did nothing regardless of value. Removed it; documented the real
+  controls (`autoCompactEnabled`/`autoCompactWindow` in settings.json, or the
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` environment variable for a percentage
+  threshold) in its place.
+
 ## The pipeline
 
 ```

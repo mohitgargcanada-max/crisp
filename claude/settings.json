@@ -5,7 +5,6 @@
     ]
   },
   "autoUpdatesChannel": "latest",
-  "compactThreshold": 0.5,
   "hooks": {
     "PreToolUse": [
       {

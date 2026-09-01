@@ -35,7 +35,10 @@ Goal: cut tokens spent on INPUT, not just output. Every token in context costs a
 - Test output: last 20 lines + failure count only
 
 ### Conversation hygiene
-- Use `/compact` when context hits 50% (already wired via compactThreshold)
+- Use `/compact` manually if context is getting heavy; automatic compaction is
+  controlled by the real settings (`autoCompactEnabled`/`autoCompactWindow` in
+  settings.json, or `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` env var for a percentage
+  threshold) — `compactThreshold` is not a real key, don't rely on it
 - After compaction: re-state active constraints in next message (compact drops context)
 - Don't repeat file contents across turns — reference by path:line
 
