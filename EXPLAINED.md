@@ -297,6 +297,22 @@ the same mistake twice because nobody remembered.
 whenever I actually find and fix a real bug, since "this was a bug" doesn't
 have a reliable text pattern the way "I made a mistake" does.
 
+**Enforced, not just logged:** a written rule in CLAUDE.md only works the
+first time — the next session can't feel the weight of "we agreed on this
+already," so the same mistake can quietly repeat. To close that gap,
+`auto_handover.py` uses Claude Code's actual Stop-hook blocking mechanism: if
+`.crisp/MISTAKES.md` has entries, the *first* time I try to finish a response
+gets blocked, and I'm handed the 5 most recent logged mistakes to check my
+change against before I'm allowed to actually stop. It only blocks once per
+turn (checks Claude Code's own `stop_hook_active` signal so it can't loop),
+and only shows the most recent 5 — not the whole file — so the check stays
+small and current no matter how long the ledger grows.
+
+**Analogy:** it's the difference between a sign on the wall saying "wash your
+hands" (easy to walk past without reading) and someone at the door who
+physically stops you until you've actually looked at it — once, every time
+you leave, not a one-time lecture you can forget by next week.
+
 ---
 
 ## No new PR tracker — `gh` already is one

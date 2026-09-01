@@ -96,6 +96,42 @@ def _save_mistakes(session_id, cwd, mistakes):
     for item in mistakes: lines.append(f"- {item}\n")
     with open(ledger,"a",encoding="utf-8") as f: f.writelines(lines)
 
+def _recent_mistakes(cwd, limit=5):
+    """Last N bullet entries from .crisp/MISTAKES.md — bounded so the review
+    checklist stays small regardless of how long the ledger grows. This is
+    NOT the full historical log; see crisp/claude/CLAUDE.md "Project Ledgers"."""
+    ledger = _project_ledger_path(cwd)
+    if not ledger.exists(): return []
+    try:
+        lines = ledger.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return []
+    bullets = [l[2:].strip() for l in lines if l.startswith("- ")]
+    return bullets[-limit:]
+
+def _review_gate(cwd, stop_hook_active):
+    """Block the Stop event once (per Claude Code's Stop-hook schema:
+    https://code.claude.com/docs/en/hooks.md) so the model reviews its own
+    change against recent project mistakes before actually finishing.
+    stop_hook_active=True means this already fired once this turn — never
+    block twice in a row, both to respect Claude Code's own loop guard and
+    because the review has already happened once."""
+    if stop_hook_active: return None
+    recent = _recent_mistakes(cwd)
+    if not recent: return None
+    checklist = "\n".join(f"- {m}" for m in recent)
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "Stop",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": "Review against project mistake ledger before finishing",
+            "systemMessage": (
+                "Before finishing, check your change doesn't repeat a mistake "
+                f"already logged in .crisp/MISTAKES.md for this project:\n{checklist}"
+            ),
+        }
+    }
+
 def _project_staging(cwd):
     project = Path(cwd).name.lower().replace(" ","-").replace("\\","").replace("/","")
     staging_dir = Path.home() / ".claude" / "memory-staging"
@@ -127,6 +163,10 @@ def main():
     _save_staging(session_id, cwd, found)
     mistakes = _scan_mistakes(msgs)
     _save_mistakes(session_id, cwd, mistakes)
+
+    gate = _review_gate(cwd, bool(event.get("stop_hook_active")))
+    if gate:
+        print(json.dumps(gate))
 
 if __name__ == "__main__":
     try: main()

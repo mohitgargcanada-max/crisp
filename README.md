@@ -81,6 +81,20 @@ They're one repo now:
   controls (`autoCompactEnabled`/`autoCompactWindow` in settings.json, or the
   `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` environment variable for a percentage
   threshold) in its place.
+- Ported the same three additions (project ledgers, gh-based tracking,
+  routing heuristic) to `codex/AGENTS.md`, adapted for Codex's instruction-only
+  model — no Stop hook there, so ledger entries are a direct instruction
+  rather than automatic detection. Also fixed real drift found on the live
+  Codex side: a stale, unmarked duplicate "Token Efficient Automation" block
+  still pointing at the retired `token-efficient-agent-kit` path.
+- `.crisp/MISTAKES.md` is now **enforced, not just logged**: `auto_handover.py`
+  uses Claude Code's real Stop-hook blocking (`permissionDecision: "deny"`,
+  see [hooks reference](https://code.claude.com/docs/en/hooks.md)) to block
+  the first stop attempt when the ledger has entries, handing back the 5 most
+  recent mistakes to check the current change against. Checks `stop_hook_active`
+  so it only blocks once per turn. Capped to 5 entries deliberately — the
+  full historical ledger would grow unbounded and defeat the point of a
+  token-efficient project.
 
 ## The pipeline
 

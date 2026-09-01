@@ -144,6 +144,16 @@ These are separate from the memory-vault's own `feedback`/`project`/`user`
 categories above — those stay in the global, prunable memory vault; bugs and
 mistakes stay local to the project, permanently.
 
+**Enforcement, not just a log:** `.crisp/MISTAKES.md` is checked, not just
+written. On `Stop`, if the project's ledger has entries, `auto_handover.py`
+blocks the *first* stop attempt (Claude Code's real Stop-hook blocking
+mechanism — `permissionDecision: "deny"`, see
+[hooks reference](https://code.claude.com/docs/en/hooks.md)) and hands back
+the 5 most recent entries to check the current change against, before
+allowing the response to actually finish. It checks `stop_hook_active` so it
+only blocks once per turn, never loops. A written rule only works the first
+time it's read; a blocking hook can't be silently skipped the second time.
+
 ## Commit & PR Discipline (no new tracker — `gh` already is one)
 
 No separate PR-tracking system: `gh pr list`/`gh pr view` already shows every
