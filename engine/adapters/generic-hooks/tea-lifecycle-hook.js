@@ -250,14 +250,20 @@ const context = [
   receiptContext(compact.event),
 ].filter(Boolean).join(" ");
 
-// `additionalContext` injects text into the MODEL's context. Emitting it on a
-// Stop event re-invokes the model, which then ends its turn again, which fires
-// this hook again — a self-feeding loop that only terminates when Claude Code
-// force-overrides it. It never settles on its own because appendStats() above
-// writes a new row every pass, so the receipt text differs each time.
-// Stop output goes to stderr instead: still surfaced, never fed back in.
-if (compact.event === "Stop") {
-  if (context) process.stderr.write(`${context}\n`);
-} else {
+// Stop hooks emit NOTHING — not stdout, not stderr.
+//
+// stdout: `additionalContext` injects text into the MODEL's context. On Stop
+// that re-invokes the model, which ends its turn again, which fires this hook
+// again — a self-feeding loop that only stops when Claude Code force-overrides
+// it. It never settles on its own because appendStats() writes a new row every
+// pass, so the receipt text differs each time.
+//
+// stderr: writing the receipt there instead was tried and destabilised the
+// client, so that is not a safe alternative either.
+//
+// Nothing is lost by staying silent: appendStats() has already persisted the
+// numbers to .tea-stats/token-savings.jsonl, so `rtk gain` and `tea.js receipt`
+// still report them on demand.
+if (compact.event !== "Stop") {
   emitAdditionalContext(compact.event, context);
 }
