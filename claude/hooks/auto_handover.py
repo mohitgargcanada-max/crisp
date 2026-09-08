@@ -32,7 +32,7 @@ MEMORY_PATTERNS = {
 # ledgers filled up with successes mislabelled as mistakes.
 MISTAKE_PATTERNS = [
     r"I made a mistake", r"that was wrong", r"my bad\b", r"I should have",
-    r"I was wrong", r"I broke\b", r"that('s| is) incorrect",
+    r"I was wrong", r"I broke\b",
     r"my mistake", r"I misunderstood", r"I got that wrong",
 ]
 
@@ -233,6 +233,6 @@ if __name__ == "__main__":
         try:
             ERROR_LOG.parent.mkdir(parents=True,exist_ok=True)
             from datetime import datetime
-            with open(ERROR_LOG,"a") as f: f.write(f"{datetime.now().isoformat()} auto_handover: {e}\n")
+            with open(ERROR_LOG,"a",encoding="utf-8") as f: f.write(f"{datetime.now().isoformat()} auto_handover: {e}\n")
         except: pass
     sys.exit(0)
