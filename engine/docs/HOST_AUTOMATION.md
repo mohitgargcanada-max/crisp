@@ -179,6 +179,27 @@ node <CRISP_HOME>\cli\tea.js run --label "<task>" -- <command>
 
 This forces shell-command output through token metrics and compact observation capture. It does not force Claude's internal reasoning through a hook.
 
+**Not recommended, and off by default as of 2026-09-08.** The hook is now
+advisory unless `TEA_STRICT_BASH=1` is set, and it is no longer registered in the
+reference `settings.json`. Enforcing it is counterproductive:
+
+- `tea.js run` does **not** shrink what reaches the model. `runObservedTask()`
+  prints the command's full stdout and stderr, then adds ~9 lines of metrics on
+  top. `compressText()` feeds `recordStats()` only — the compressed text is never
+  emitted. Wrapping every command therefore makes context *larger*.
+- It is not a pipeline stage. Stage 2 (RTK) is what actually compresses shell
+  output — measured 93.8% on file reads. Stage 6 (`tea-lifecycle-hook.js`)
+  already records stats and observations for **every tool**, PowerShell included.
+- Strict mode likely defeats Stage 2. RTK rewrites the command it is given; once
+  the command is `node tea.js run -- <cmd>`, RTK sees a `node` invocation rather
+  than the inner `grep`/`cat`, so the compression that produces the real savings
+  probably never applies. (Inferred from RTK's rewriting model, not measured.)
+
+`tea run` remains genuinely useful **manually**, for a long task where the receipt
+is the point — `tea.js run --label "tests" -- npm test`. That is what AGENTS.md
+means by *prefer it where token metrics and compact observations are useful*: a
+deliberate choice per command, not a blanket gate on the Bash tool.
+
 ## Codex
 
 Codex already has token-efficient-agent MCP configured in `%USERPROFILE%\.codex\config.toml` on this machine.
