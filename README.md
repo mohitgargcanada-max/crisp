@@ -88,7 +88,8 @@ They're one repo now:
   Codex side: a stale, unmarked duplicate "Token Efficient Automation" block
   still pointing at the retired `token-efficient-agent-kit` path.
 - `.crisp/MISTAKES.md` is now **enforced, not just logged**: `auto_handover.py`
-  uses Claude Code's real Stop-hook blocking (`permissionDecision: "deny"`,
+  uses Claude Code's real Stop-hook blocking (a top-level
+  `{"decision": "block", "reason": ...}`,
   see [hooks reference](https://code.claude.com/docs/en/hooks.md)) to block
   the first stop attempt when the ledger has entries, handing back the 5 most
   recent mistakes to check the current change against. Checks `stop_hook_active`

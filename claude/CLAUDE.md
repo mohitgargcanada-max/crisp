@@ -147,7 +147,7 @@ mistakes stay local to the project, permanently.
 **Enforcement, not just a log:** `.crisp/MISTAKES.md` is checked, not just
 written. On `Stop`, if the project's ledger has entries, `auto_handover.py`
 blocks the *first* stop attempt (Claude Code's real Stop-hook blocking
-mechanism — `permissionDecision: "deny"`, see
+mechanism — a top-level `{"decision": "block", "reason": ...}`, see
 [hooks reference](https://code.claude.com/docs/en/hooks.md)) and hands back
 up to 5 entries to check the current change against, before allowing the
 response to actually finish. It checks `stop_hook_active` so it only blocks

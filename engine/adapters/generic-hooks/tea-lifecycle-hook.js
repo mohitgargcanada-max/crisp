@@ -242,7 +242,22 @@ const contextPressure = contextSuggestion({
   transcriptPath: compact.payload.transcript_path,
 });
 
-emitAdditionalContext(
-  compact.event,
-  [rolloverContext(compact), wakeContext(compact, raw), learnedContext, contextPressure, receiptContext(compact.event)].filter(Boolean).join(" ")
-);
+const context = [
+  rolloverContext(compact),
+  wakeContext(compact, raw),
+  learnedContext,
+  contextPressure,
+  receiptContext(compact.event),
+].filter(Boolean).join(" ");
+
+// `additionalContext` injects text into the MODEL's context. Emitting it on a
+// Stop event re-invokes the model, which then ends its turn again, which fires
+// this hook again — a self-feeding loop that only terminates when Claude Code
+// force-overrides it. It never settles on its own because appendStats() above
+// writes a new row every pass, so the receipt text differs each time.
+// Stop output goes to stderr instead: still surfaced, never fed back in.
+if (compact.event === "Stop") {
+  if (context) process.stderr.write(`${context}\n`);
+} else {
+  emitAdditionalContext(compact.event, context);
+}

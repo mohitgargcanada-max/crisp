@@ -150,16 +150,15 @@ def _review_gate(cwd, stop_hook_active, touched_files):
     recent = _relevant_mistakes(cwd, touched_files)
     if not recent: return None
     checklist = "\n".join(f"- {m}" for m in recent)
+    # Stop hooks block with a TOP-LEVEL {"decision": "block", "reason": ...}.
+    # The permissionDecision/hookSpecificOutput shape is PreToolUse-only and is
+    # silently ignored on Stop, which made this gate a no-op for its whole life.
     return {
-        "hookSpecificOutput": {
-            "hookEventName": "Stop",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": "Review against project mistake ledger before finishing",
-            "systemMessage": (
-                "Before finishing, check your change doesn't repeat a mistake "
-                f"already logged in .crisp/MISTAKES.md for this project:\n{checklist}"
-            ),
-        }
+        "decision": "block",
+        "reason": (
+            "Before finishing, check your change doesn't repeat a mistake "
+            f"already logged in .crisp/MISTAKES.md for this project:\n{checklist}"
+        ),
     }
 
 def _project_staging(cwd):
