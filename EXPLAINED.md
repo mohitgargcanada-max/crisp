@@ -44,8 +44,10 @@ full hashes, full messages, forever. RTK quietly turns that into `git log
 information, 90%+ less reading.
 
 **Where:** a compiled tool (`rtk` binary), wired as a `PreToolUse` hook for
-`Bash` in `claude/settings.json`. Not vendored in this repo — installed via
-`cargo install rtk`.
+`Bash` in `claude/settings.json`. Not vendored in this repo — installed from
+https://github.com/rtk-ai/rtk (`brew install rtk-ai/tap/rtk`, or the Windows
+zip from its releases page). Note: **not** `cargo install rtk` — that crates.io
+crate is Rust Type Kit, a different project; `rtk gain` tells the two apart.
 
 ---
 

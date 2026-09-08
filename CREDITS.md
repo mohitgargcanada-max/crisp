@@ -6,8 +6,11 @@ CRISP is a pipeline assembled from existing best-in-class tools. We built the
 ## Tools we integrated (full credit to original authors)
 
 ### RTK — Rust Token Killer
-- **Author:** Unknown / community (open source)
-- **Repo:** Install via `cargo install rtk` 
+- **Author:** rtk-ai (open source, Apache-2.0)
+- **Repo:** https://github.com/rtk-ai/rtk
+- **Install:** `brew install rtk-ai/tap/rtk`, or the Windows zip from the
+  releases page. **Not** `cargo install rtk` — the crates.io crate of that
+  name is Rust Type Kit, an unrelated project.
 - **What they built:** Binary that rewrites shell commands to produce compressed output.
   60–90% savings on git, npm, test runners, file listings.
 - **Our contribution:** Wired as PreToolUse:Bash hook in Claude Code + Codex.

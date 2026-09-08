@@ -10,8 +10,13 @@ HOOKS="$CLAUDE/hooks"
 SKILLS="$CLAUDE/skills"
 CODEX="$HOME/.codex"
 
-echo "CRISP installer"
-echo "==============="
+# Single source of truth for the version: the VERSION file at the repo root.
+# Kept as a plain file rather than duplicated into both installers, so a
+# release only ever has to touch one place.
+CRISPVER="$(tr -d '[:space:]' < "$CRISP/VERSION" 2>/dev/null || echo unknown)"
+
+echo "CRISP installer v$CRISPVER"
+echo "========================="
 
 # 1. Create dirs
 mkdir -p "$HOOKS" "$SKILLS" "$CODEX"
@@ -113,7 +118,13 @@ if command -v rtk &>/dev/null; then
   echo "  ✓ RTK found: $(which rtk)"
 else
   echo "  RTK not found. Install it:"
-  echo "    cargo install rtk   (requires Rust: https://rustup.rs)"
+  echo "    brew install rtk-ai/tap/rtk                      # macOS / Linux"
+  echo "    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/develop/install.sh | sh"
+  echo "    Windows: rtk-x86_64-pc-windows-msvc.zip from"
+  echo "             https://github.com/rtk-ai/rtk/releases/latest"
+  echo "    then: rtk init --global"
+  echo "    DO NOT 'cargo install rtk' - that crates.io crate is Rust Type Kit,"
+  echo "    an unrelated project. Verify with 'rtk gain'."
 fi
 
 # 9. Check companion plugins — real Claude Code plugins (namespaced skills,

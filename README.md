@@ -186,10 +186,20 @@ appends the automation block into `~/.codex/AGENTS.md`, prints the MCP server
 snippet for you to paste into `~/.codex/config.toml` (never auto-edited — it can
 hold secrets), and prints the notify-wiring line for session-rollover tracking.
 
-Install RTK separately (it's a binary, not vendored):
+Install RTK separately (it's a binary, not vendored) from
+[rtk-ai/rtk](https://github.com/rtk-ai/rtk):
+
 ```bash
-cargo install rtk
+brew install rtk-ai/tap/rtk                                                   # macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/develop/install.sh | sh
+# Windows: rtk-x86_64-pc-windows-msvc.zip from https://github.com/rtk-ai/rtk/releases/latest
+rtk init --global
 ```
+
+> **Do not run `cargo install rtk`.** The crates.io crate under that name is
+> *Rust Type Kit*, an unrelated project — installing it gives you a working
+> `rtk` binary that does something else entirely. Confirm you have the right
+> one with `rtk gain`, which the other project has no subcommand for.
 
 Three more things (claude-mem, superpowers, Anthropic's code-review plugin)
 are real Claude Code *plugins* — namespaced skills and/or their own hooks, so

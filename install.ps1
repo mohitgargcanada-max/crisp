@@ -8,8 +8,14 @@ $HOOKS      = "$CLAUDE\hooks"
 $SKILLS     = "$CLAUDE\skills"
 $CODEX      = "$env:USERPROFILE\.codex"
 
-Write-Host "CRISP installer" -ForegroundColor Cyan
-Write-Host "===============" -ForegroundColor Cyan
+# Single source of truth for the version: the VERSION file at the repo root.
+# Kept as a plain file rather than duplicated into both installers, so a
+# release only ever has to touch one place.
+$VERSIONFILE = Join-Path $CRISP "VERSION"
+$CRISPVER    = if (Test-Path $VERSIONFILE) { (Get-Content $VERSIONFILE -Raw).Trim() } else { "unknown" }
+
+Write-Host "CRISP installer v$CRISPVER" -ForegroundColor Cyan
+Write-Host "=========================" -ForegroundColor Cyan
 
 # 1. Create dirs
 New-Item -ItemType Directory -Force -Path $HOOKS  | Out-Null
@@ -133,8 +139,14 @@ if ($rtk) {
     Write-Host "  RTK found: $($rtk.Source)" -ForegroundColor Green
 } else {
     Write-Host "  RTK not found. Install it:" -ForegroundColor Yellow
-    Write-Host "    cargo install rtk" -ForegroundColor White
-    Write-Host "    (requires Rust: https://rustup.rs)" -ForegroundColor White
+    Write-Host "    Windows     : download rtk-x86_64-pc-windows-msvc.zip from" -ForegroundColor White
+    Write-Host "                  https://github.com/rtk-ai/rtk/releases/latest" -ForegroundColor White
+    Write-Host "    macOS/Linux : brew install rtk-ai/tap/rtk" -ForegroundColor White
+    Write-Host "                  or curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/develop/install.sh | sh" -ForegroundColor White
+    Write-Host "    Then        : rtk init --global" -ForegroundColor White
+    Write-Host "    DO NOT run 'cargo install rtk' - the crates.io crate of that name is" -ForegroundColor Yellow
+    Write-Host "    Rust Type Kit, an unrelated project. Verify you have the right one" -ForegroundColor Yellow
+    Write-Host "    with 'rtk gain' (the wrong one has no such subcommand)." -ForegroundColor Yellow
 }
 
 # 9. Check companion plugins — real Claude Code plugins (namespaced skills,
