@@ -26,9 +26,13 @@ MEMORY_PATTERNS = {
 
 # Scanned across BOTH user and assistant messages (a mistake can be admitted
 # by either side), unlike MEMORY_PATTERNS above which is user-only.
+# Deliberately narrow: each must read as an ADMISSION, not as narration about a
+# bug. "root cause was" and "this broke because" were removed — they match
+# ordinary fix reports ("root cause was X, now fixed"), which is how live
+# ledgers filled up with successes mislabelled as mistakes.
 MISTAKE_PATTERNS = [
     r"I made a mistake", r"that was wrong", r"my bad\b", r"I should have",
-    r"root cause was", r"this broke because", r"I broke\b", r"that('s| is) incorrect",
+    r"I was wrong", r"I broke\b", r"that('s| is) incorrect",
     r"my mistake", r"I misunderstood", r"I got that wrong",
 ]
 
@@ -42,7 +46,10 @@ def _read_transcript(transcript_path: str):
     msgs = []
     files = set()
     try:
-        for line in Path(transcript_path).read_text(errors="ignore").splitlines():
+        # encoding="utf-8" is required: transcripts are UTF-8, but read_text()
+        # defaults to the platform encoding (cp1252 on Windows), which silently
+        # mangles any non-ASCII character — em-dashes became "â€"" in ledgers.
+        for line in Path(transcript_path).read_text(encoding="utf-8", errors="ignore").splitlines():
             try:
                 obj = json.loads(line)
                 msg = obj.get("message", {})
@@ -85,9 +92,14 @@ def _categorize(msgs):
 def _scan_mistakes(msgs):
     found = []
     for m in msgs:
+        text = m["text"]
+        # Skip generated reports: a markdown table is analysis, not an
+        # admission. Without this, a write-up *about* a bug gets logged as if it
+        # were the bug — the ledger fills with the prose describing the problem.
+        if "|---" in text or "| ---" in text: continue
         for pat in MISTAKE_PATTERNS:
-            if re.search(pat, m["text"], re.IGNORECASE):
-                s = m["text"][:220].replace("\n"," ")
+            if re.search(pat, text, re.IGNORECASE):
+                s = text[:220].replace("\n"," ")
                 if s not in found: found.append(s)
                 break
     return found
@@ -105,11 +117,20 @@ def _save_mistakes(session_id, cwd, mistakes):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     ledger = _project_ledger_path(cwd)
     is_new = not ledger.exists()
+    # Dedup against what the ledger ALREADY holds, not merely within this call.
+    # Every Stop re-scans the same trailing messages, so without this one
+    # admission is re-appended on each turn and becomes N copies per session.
+    existing = ""
+    if not is_new:
+        try: existing = ledger.read_text(encoding="utf-8", errors="ignore")
+        except Exception: existing = ""
+    fresh = [m for m in mistakes if m not in existing]
+    if not fresh: return
     lines = []
     if is_new:
         lines.append("# Mistakes Ledger\n\nAuto-drafted by auto_handover.py; edit freely — this is a starting point, not a final record.\n")
     lines.append(f"\n## {ts} | {session_id[:8]}\n")
-    for item in mistakes: lines.append(f"- {item}\n")
+    for item in fresh: lines.append(f"- {item}\n")
     with open(ledger,"a",encoding="utf-8") as f: f.writelines(lines)
 
 def _relevant_mistakes(cwd, touched_files, limit=5):
@@ -132,6 +153,15 @@ def _relevant_mistakes(cwd, touched_files, limit=5):
     except Exception:
         return []
     bullets = [l[2:].strip() for l in lines if l.startswith("- ")]
+    # Dedup at READ time too, not only at write time. Ledgers written before the
+    # write-side fix already contain duplicates, and they are user data that
+    # must not be rewritten in place — so the gate filters them on the way out.
+    seen, deduped = set(), []
+    for b in bullets:
+        if b not in seen:
+            seen.add(b)
+            deduped.append(b)
+    bullets = deduped
     if not bullets: return []
 
     matched = [b for b in bullets if touched_files and any(f in b.lower() for f in touched_files)]
