@@ -6,6 +6,32 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.1] — 2026-09-08
+
+### Fixed
+
+- **Every CRISP lifecycle hook was silently dead on Windows.** All 22 hook commands in
+  `claude/settings.json` were written as an *unquoted* Windows path (`node <CRISP_HOME>\\adapters\\...\\tea-lifecycle-hook.js --host claude-code --event Stop`).
+
+  Claude Code runs hook commands through `sh` on Windows, which consumes the backslashes as
+  escape sequences. The path collapsed to `Usersmohittoolscrisp...` and was then resolved
+  relative to the current working directory, so every invocation died with
+  `MODULE_NOT_FOUND` — surfacing only as a stray Node stack trace, never as a CRISP error.
+  An installed, configured, completely inert hook looks exactly like a working one.
+
+  This took out the whole lifecycle across **21 events** (`SessionStart`, `SessionEnd`,
+  `Stop`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`, `PostCompact`,
+  `SubagentStart`/`Stop`, `TaskCreated`/`Completed` and the rest) plus the separate
+  `enforce-tea-run.js` hook — so the token receipt, the turn counter, rollover tracking and
+  the session-end memory promotion had all been no-ops on Windows while appearing installed.
+
+  Fix: quote the path in the shipped template. Verified against real runs before shipping —
+  unquoted fails with `MODULE_NOT_FOUND`, quoted returns the hook's real JSON output, and a
+  forward-slash path works too (node accepts `/` on Windows).
+
+  **Existing installs are not rewritten by this change.** Either re-run the installer, or
+  quote the paths in `~/.claude/settings.json` by hand.
+
 ## [0.1.0] — 2026-09-08
 
 First versioned release. CRISP had shipped unversioned since 2026-08-10 (17 commits, no tags),

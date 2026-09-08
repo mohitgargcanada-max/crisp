@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PreToolUse"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PreToolUse"
           }
         ]
       },
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\claude-code\\enforce-tea-run.js"
+            "command": "node \"<CRISP_HOME>\\adapters\\claude-code\\enforce-tea-run.js\""
           }
         ]
       }
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event Stop"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event Stop"
           }
         ]
       }
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event UserPromptSubmit"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event UserPromptSubmit"
           }
         ]
       },
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolUse"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PostToolUse"
           }
         ]
       },
@@ -119,7 +119,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SessionStart"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event SessionStart"
           }
         ]
       },
@@ -148,7 +148,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event InstructionsLoaded"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event InstructionsLoaded"
           }
         ]
       }
@@ -159,7 +159,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event UserPromptExpansion"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event UserPromptExpansion"
           }
         ]
       }
@@ -170,7 +170,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PermissionDenied"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PermissionDenied"
           }
         ]
       }
@@ -181,7 +181,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolUseFailure"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PostToolUseFailure"
           }
         ]
       }
@@ -192,7 +192,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostToolBatch"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PostToolBatch"
           }
         ]
       }
@@ -203,7 +203,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event Notification"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event Notification"
           }
         ]
       }
@@ -214,7 +214,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SubagentStart"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event SubagentStart"
           }
         ]
       }
@@ -225,7 +225,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SubagentStop"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event SubagentStop"
           }
         ]
       }
@@ -236,7 +236,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event TaskCreated"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event TaskCreated"
           }
         ]
       }
@@ -247,7 +247,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event TaskCompleted"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event TaskCompleted"
           }
         ]
       }
@@ -258,7 +258,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event StopFailure"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event StopFailure"
           }
         ]
       }
@@ -269,7 +269,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PreCompact"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PreCompact"
           }
         ]
       }
@@ -280,7 +280,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event PostCompact"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event PostCompact"
           }
         ]
       }
@@ -291,7 +291,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event SessionEnd"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event SessionEnd"
           }
         ]
       }
@@ -302,7 +302,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event ConfigChange"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event ConfigChange"
           }
         ]
       }
@@ -313,7 +313,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node <CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js --host claude-code --event CwdChanged"
+            "command": "node \"<CRISP_HOME>\\adapters\\generic-hooks\\tea-lifecycle-hook.js\" --host claude-code --event CwdChanged"
           }
         ]
       }
