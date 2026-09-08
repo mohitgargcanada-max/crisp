@@ -180,8 +180,29 @@ function emitAdditionalContext(event, context) {
   process.stdout.write(JSON.stringify(output));
 }
 
+// Events that end a turn, a task, or the session. Emitting `additionalContext`
+// on ANY of them re-invokes the model, which ends its turn again, which re-fires
+// this hook — the self-feeding loop that crashed the client (see .crisp/BUGS.md,
+// 2026-09-08). It never settles on its own because appendStats() writes a new row
+// every pass, so the text differs each time. stderr is not an escape hatch: that
+// was tried and destabilised the client too.
+//
+// `Stop` alone was guarded originally, which left TaskCompleted / SessionEnd /
+// PostCompact — all reachable from receiptContext() and wakeContext() — carrying
+// the same loop shape.
+//
+// Nothing is lost by staying silent. appendStats() has already persisted the
+// numbers to .tea-stats/token-savings.jsonl before this point, so `rtk gain` and
+// `tea.js receipt` still report them on demand.
+const TERMINAL_EVENTS = new Set([
+  "Stop", "StopFailure", "SubagentStop", "TaskCompleted", "SessionEnd",
+]);
+
 function receiptContext(event) {
-  if (!["TaskCompleted", "Stop", "SessionEnd", "PostCompact"].includes(event)) return "";
+  // Terminal events discard this text anyway; returning early also skips a
+  // pointless `node tea.js receipt` spawn on every one of them.
+  if (TERMINAL_EVENTS.has(event)) return "";
+  if (event !== "PostCompact") return "";
   const result = spawnSync("node", [TEA, "receipt", MEMORY_DIR], { encoding: "utf8", windowsHide: true });
   if (result.status !== 0) return "";
   return String(result.stdout || "").trim();
@@ -250,20 +271,12 @@ const context = [
   receiptContext(compact.event),
 ].filter(Boolean).join(" ");
 
-// Stop hooks emit NOTHING — not stdout, not stderr.
+// Terminal events emit NOTHING — not stdout, not stderr. See TERMINAL_EVENTS.
 //
-// stdout: `additionalContext` injects text into the MODEL's context. On Stop
-// that re-invokes the model, which ends its turn again, which fires this hook
-// again — a self-feeding loop that only stops when Claude Code force-overrides
-// it. It never settles on its own because appendStats() writes a new row every
-// pass, so the receipt text differs each time.
-//
-// stderr: writing the receipt there instead was tried and destabilised the
-// client, so that is not a safe alternative either.
-//
-// Nothing is lost by staying silent: appendStats() has already persisted the
-// numbers to .tea-stats/token-savings.jsonl, so `rtk gain` and `tea.js receipt`
-// still report them on demand.
-if (compact.event !== "Stop") {
+// Note the asymmetry: wakeContext() above is still CALLED on terminal events,
+// because scheduling the limit-reset wake is a real side effect worth keeping.
+// Only its returned TEXT is dropped here, along with everything else in
+// `context`. Suppress the emission, never the work.
+if (!TERMINAL_EVENTS.has(compact.event)) {
   emitAdditionalContext(compact.event, context);
 }

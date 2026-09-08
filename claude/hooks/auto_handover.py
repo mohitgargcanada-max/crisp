@@ -13,7 +13,7 @@ raw message text into feedback/project/user candidates for the curated memory
 files under ~/.claude/projects/<project>/memory/, plus the mistake-ledger draft.
 """
 from __future__ import annotations
-import json, re, sys
+import json, re, sys, traceback
 from pathlib import Path
 
 MEMORY_PATTERNS = {
@@ -38,11 +38,30 @@ MISTAKE_PATTERNS = [
 
 ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
 
+def _log_error(msg: str) -> None:
+    """Every failure in here used to vanish into a bare `except: pass`, so
+    hook-errors.log had never once been created and nothing this hook got wrong
+    was ever visible. Still best-effort — a logging failure must never break the
+    Stop event — but it now leaves a trace."""
+    try:
+        ERROR_LOG.parent.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime
+        with open(ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} auto_handover: {msg}\n")
+    except Exception:
+        pass
+
 def _read_transcript(transcript_path: str):
-    """Returns (recent_messages, touched_files). touched_files are basenames
-    pulled from Edit/Write/Read tool_use inputs in the transcript — used to
-    rank mistake-ledger relevance by what's actually being worked on this
-    turn, not just by recency."""
+    """Returns (recent_messages, touched_files, all_messages). recent_messages
+    is the trailing 20, used for memory-staging categorization same as
+    before; all_messages is the full parsed transcript, used by main() to
+    apply the per-session mistake-scan watermark (see _load_watermark) so a
+    long-running session doesn't re-scan (and re-attempt to save) the same
+    old admission every single Stop event for as long as it stays inside the
+    trailing-20 window. touched_files are basenames pulled from Edit/Write/
+    Read tool_use inputs in the transcript — used to rank mistake-ledger
+    relevance by what's actually being worked on this turn, not just by
+    recency."""
     msgs = []
     files = set()
     try:
@@ -73,9 +92,15 @@ def _read_transcript(transcript_path: str):
                     text = str(content)
                 text = text.strip()
                 if text: msgs.append({"role":role,"text":text})
-            except: pass
-    except: pass
-    return msgs[-20:], files
+            # One malformed line is expected and skippable. `except Exception`
+            # rather than a bare `except` so KeyboardInterrupt and SystemExit
+            # still propagate instead of being silently swallowed.
+            except Exception: continue
+    except Exception as e:
+        # A whole-transcript failure is NOT expected. Left unlogged it returns an
+        # empty scan, which is indistinguishable from "nothing to report".
+        _log_error(f"_read_transcript({transcript_path!r}): {e!r}")
+    return msgs[-20:], files, msgs
 
 def _categorize(msgs):
     found = {"feedback":[],"project":[],"user":[]}
@@ -111,6 +136,46 @@ def _project_ledger_path(cwd):
     ledger_dir.mkdir(parents=True, exist_ok=True)
     return ledger_dir / "MISTAKES.md"
 
+def _watermark_path(cwd):
+    # Sidecar next to the ledger, not inside it -- one small JSON file,
+    # {session_id: message_count_already_scanned}, so a session doesn't keep
+    # re-scanning (and re-attempting to save) the same old admission every
+    # single Stop event for as long as it stays inside the trailing-20-message
+    # window. Reproduced directly: the write-side substring dedup (`m in
+    # existing`) IS correct for a genuine byte-identical repeat -- the real
+    # observed failure was the SAME session re-finding and re-saving the same
+    # admission many times over several hours, which a per-session watermark
+    # prevents at the source (never re-considered) rather than patching after
+    # the fact (compared-but-still-attempted). Lives in .crisp/ like the
+    # ledger itself, not ~/.claude/*, for the same reason: project-local,
+    # git-ignorable, survives independent of the global memory-vault.
+    return Path(cwd) / ".crisp" / ".mistake_scan_watermarks.json"
+
+
+def _load_watermark(cwd, session_id):
+    path = _watermark_path(cwd)
+    if not path.exists(): return 0
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return int(data.get(session_id, 0))
+    except Exception:
+        return 0
+
+
+def _save_watermark(cwd, session_id, total_msg_count):
+    path = _watermark_path(cwd)
+    data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception: data = {}
+    data[session_id] = total_msg_count
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _save_mistakes(session_id, cwd, mistakes):
     if not mistakes: return
     from datetime import datetime
@@ -118,8 +183,12 @@ def _save_mistakes(session_id, cwd, mistakes):
     ledger = _project_ledger_path(cwd)
     is_new = not ledger.exists()
     # Dedup against what the ledger ALREADY holds, not merely within this call.
-    # Every Stop re-scans the same trailing messages, so without this one
-    # admission is re-appended on each turn and becomes N copies per session.
+    # A byte-identical repeat (the case that actually matters going forward --
+    # _read_transcript's own utf-8 fix above means every future read/write is
+    # consistently encoded) is caught by a plain substring check; the separate,
+    # real problem of the SAME session re-scanning the SAME old admission for
+    # hours is handled upstream by the per-session watermark (_load_watermark/
+    # _save_watermark), not here.
     existing = ""
     if not is_new:
         try: existing = ledger.read_text(encoding="utf-8", errors="ignore")
@@ -211,17 +280,31 @@ def main():
     import os
     raw = sys.stdin.read() or "{}"
     try: event = json.loads(raw)
-    except: event = {}
+    except Exception as e:
+        _log_error(f"main: unparseable hook payload: {e!r}")
+        event = {}
 
     session_id = event.get("session_id") or event.get("sessionId") or "session"
     cwd = event.get("cwd", os.getcwd())
     transcript_path = event.get("transcript_path") or event.get("transcriptPath","")
 
-    msgs, touched_files = _read_transcript(transcript_path) if transcript_path else ([], set())
+    msgs, touched_files, all_msgs = _read_transcript(transcript_path) if transcript_path else ([], set(), [])
     found = _categorize(msgs)
     _save_staging(session_id, cwd, found)
-    mistakes = _scan_mistakes(msgs)
+    # Mistake-scan watermark: only consider messages added since the LAST
+    # time this session's Stop hook ran, not the trailing-20 window every
+    # time. Without this, an admission sitting anywhere in a long, quiet
+    # stretch gets re-detected and re-attempted on every single turn for as
+    # long as it stays inside the last 20 -- reproduced directly against a
+    # real duplicate group in this ledger (same session_id, same text,
+    # re-saved 9 times over ~4 hours). The write-side substring dedup in
+    # _save_mistakes still catches a byte-identical repeat if one somehow
+    # gets through; this stops the repeat from being considered at all.
+    watermark = _load_watermark(cwd, session_id)
+    new_msgs = all_msgs[watermark:] if watermark < len(all_msgs) else []
+    mistakes = _scan_mistakes(new_msgs)
     _save_mistakes(session_id, cwd, mistakes)
+    _save_watermark(cwd, session_id, len(all_msgs))
 
     gate = _review_gate(cwd, bool(event.get("stop_hook_active")), touched_files)
     if gate:
@@ -230,9 +313,8 @@ def main():
 if __name__ == "__main__":
     try: main()
     except Exception as e:
-        try:
-            ERROR_LOG.parent.mkdir(parents=True,exist_ok=True)
-            from datetime import datetime
-            with open(ERROR_LOG,"a",encoding="utf-8") as f: f.write(f"{datetime.now().isoformat()} auto_handover: {e}\n")
-        except: pass
+        # Full traceback, not just str(e): "KeyError: 'message'" alone gives no
+        # line to look at, which is why the earlier one-line form would not have
+        # helped even if the log had ever been written.
+        _log_error(f"main: {e!r}\n{traceback.format_exc()}")
     sys.exit(0)

@@ -27,9 +27,24 @@ function normalized(text) {
   return String(text || "").replace(/\\/g, "/").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+// Strict mode is OFF by default. `rtk hook claude` is registered ahead of this
+// hook on the same PreToolUse/Bash matcher and already rewrites commands for
+// token efficiency, so hard-denying here demanded a SECOND wrapper for a job
+// already done — at the cost of blocking 100% of Bash. Set TEA_STRICT_BASH=1 to
+// restore the hard deny.
+//
+// Known limitation of strict mode: settings.json scopes this hook to the `Bash`
+// matcher only, so the PowerShell tool bypasses it entirely. On Windows that is
+// most of the shell traffic. Add "PowerShell" to the matcher if strict mode is
+// meant to be airtight.
+const STRICT = /^(1|true|yes|on)$/i.test(String(process.env.TEA_STRICT_BASH || ""));
+
+// Match the command HEAD, not any substring. The old check passed anything
+// merely CONTAINING "tea.js", so `echo tea.js; <anything>` sailed straight
+// through and strict mode was never actually strict.
 function isTeaCommand(command) {
   const cmd = normalized(command);
-  return cmd.includes("token-efficient-agent-kit/cli/tea.js") || /\btea\.js\b/.test(cmd);
+  return /^(?:[^\s|&;]*\bnode\s+)?(?:"[^"]*tea\.js"|'[^']*tea\.js'|[^\s|&;]*tea\.js)(?:\s|$)/.test(cmd);
 }
 
 function isTeaRun(command) {
@@ -57,6 +72,11 @@ const tool = payload.tool_name || payload.tool || "";
 const command = payload.tool_input?.command || payload.input?.command || payload.command || "";
 
 if (tool !== "Bash" || !command) process.exit(0);
+
+// Advisory by default: emit nothing and let the call through. Emitting a nudge
+// on every Bash call would itself cost tokens on every Bash call, which defeats
+// the point of a token-efficiency hook.
+if (!STRICT) process.exit(0);
 
 if (isTeaRun(command) || isTeaCommand(command)) process.exit(0);
 
