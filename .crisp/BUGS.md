@@ -44,3 +44,29 @@ handover was lost.
 
 **Fix.** `raw = (sys.stdin.read() or "").strip() or "{}"`. Verified across empty, whitespace,
 valid and `stop_hook_active` payloads: all exit 0, no spurious stop-block. Status: FIXED.
+
+## 2026-09-09 — review gate interrupted turns that changed nothing
+
+**Symptom.** The `.crisp/MISTAKES.md` Stop-hook gate blocked on read-only turns — answering a
+question, reading a file — where there was no change to review.
+
+**Root cause.** `_review_gate` fell back to the most recent ledger entries whenever
+`touched_files` was empty. And `touched_files` was the wrong signal in both directions: it
+collects `file_path` from **Read** as well as Edit/Write (so a read-only turn looks like a
+write), and it never sees Bash-driven edits at all — heredocs, redirects, `sed -i` — which is
+how most edits are made in this setup.
+
+**Fix.** Added `_wrote_this_turn(transcript_path)`: scans only entries after the last real user
+message (tool_result envelopes arrive as role=user with no text block and are not mistaken for
+a new turn), returns True for Edit/Write/MultiEdit/NotebookEdit or a Bash command matching a
+write pattern. `_review_gate` returns None when it is False. On an unreadable transcript it
+returns True — it cannot prove the turn was read-only, so it fails toward reviewing.
+
+9/9 tests pass, including the turn-scoping case (a prior turn that wrote, followed by a
+read-only turn, correctly reads as read-only) and end-to-end through the hook. Status: FIXED.
+
+**Why it mattered.** A gate that interrupts when there is nothing to check trains the reader to
+dismiss it by reflex, and a gate dismissed by reflex is worse than no gate at all.
+
+*(`auto_handover.py` lives in `~/.claude/hooks/`, outside this repo, so only this ledger entry
+is committed here.)*
