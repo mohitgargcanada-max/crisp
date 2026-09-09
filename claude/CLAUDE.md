@@ -61,6 +61,59 @@ for the current project. Load relevant slices. Confirm in one line: "Memory load
 At session END (when writing handover): promote staged candidates from
 ~/.claude/hooks/memory_staging.md into proper memory files if they meet the criteria above.
 
+## Memory Hygiene — volatile facts and pending items (added 2026-09-08)
+
+Two rules, both from real failures rather than theory. They change HOW memory is
+written; they add no new store, no new file and no new tooling. (A review of
+supermemoryai/supermemory prompted them — the two ideas worth taking were
+contradiction-resolution and automatic forgetting; everything else it does we
+either already have or do not need.)
+
+### 1. A volatile fact must carry how to re-verify it
+
+A fact that will silently go false needs a marker saying so. Mark it inline:
+
+    - [VOLATILE: re-run scripts/check_graph_fresh.py] graph FRESH at commit 4adcfab
+    - [VOLATILE: check `git log`] other session holds uncommitted edits in chart_adapter.py
+    - [VOLATILE: netstat + /api/health] server restart still pending
+
+Anything read out of a `[VOLATILE: ...]` line is re-verified before being stated
+as current, no exceptions — including by the session that wrote it.
+
+**Why.** In one session on 2026-09-08, three memory lines went false within hours
+of being written: "polymarket test failures are open, worth a fix later" (they had
+just been fixed), "graph FRESH at 4adcfab" (true for minutes), and "the other
+session holds uncommitted edits" (they committed). Each was written as durable
+fact and each would have misled the next reader. Prose like "supersedes X for
+anything it contradicts" does not help: no mechanism enforces it and no reader can
+tell which half is stale.
+
+**What is NOT volatile:** rules, decisions, root causes, measured constants,
+"why we chose X". Those are the memory worth keeping. Do not mark them.
+
+### 2. Pending items are checkbox facts, not prose
+
+Every open item is one line that can flip status WITHOUT rewriting the narrative
+around it:
+
+    - [ ] OPEN — restart 8766; carries the row-801 base_count fix
+    - [x] DONE 4adcfab — polymarket probe gap (rows 812/813)
+    - [~] SUPERSEDED — see project_pending_master_2026-09-09
+
+**Why.** A pending list written as prose hides its own staleness — nothing can
+show that line 40 went false while line 12 stayed true, so the whole file rots
+together and gets re-read as if uniformly current. On 2026-09-08 a 179-line
+narrative handover kept asserting a fixed item was open, because marking it done
+would have meant rewriting the paragraph it lived in. A checkbox flips in one
+character.
+
+**One file per project per day**, per the Auto-Commit rule above — never a topic
+suffix (`..._2026-09-08-news.md` created a SECOND competing "READ FIRST" entry
+alongside the dated file, and a reader cannot tell which is current). When several
+sessions run concurrently, each owns a `## Session <id8>` section and edits only
+its own; the memory-vault's own `session-state/<session-id>.json` already keys
+state by session and needs no duplicate.
+
 ## Context Compression
 
 `compactThreshold` in settings.json is **not a real Claude Code key** — verified
