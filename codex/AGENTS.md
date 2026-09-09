@@ -51,7 +51,9 @@ source files. Only read raw files to edit specific lines.
 2. Docs update is part of done. Any behavioral change updates docs in same session.
 3. Secrets via env only. Never hardcode API keys, tokens, passwords.
 4. Token-efficient always. Root cause in one line. Tables not prose.
-5. Session rollover at 10–12 turns. Write compact handoff, suggest fresh session.
+5. Session rollover at `TEA_ROLLOVER_TURNS` (default 12) — see the Session Rollover
+   section below. Write a compact handoff, suggest a fresh session. No competing number
+   is stated anywhere: this rule, that section and the automation defaults must agree.
 6. Audit before building. Before adding anything new — a file, a tracker, a
    system — check whether it already exists in the project or the toolkit and
    reuse it. Don't build a second version of something that already does the job.
@@ -61,6 +63,71 @@ source files. Only read raw files to edit specific lines.
 8. No slop in sub-instructions. If dispatching work to another process or
    agent, brief it like a colleague who knows nothing of this session — file
    paths, concrete context, what's already ruled out.
+
+## Memory Agent
+
+Fallback order: current session first, then the local memory map, then external
+memory. Recall only small relevant facts and compress before use — 3-5 facts, not
+a dump. Never save secrets or sensitive info without explicit approval.
+Default vault: `<CRISP_HOME>/memory-vault` (wherever this repo's `engine/` was installed).
+
+## Auto Memory — what to save, when, without being asked
+
+Save automatically, no prompt needed, when you observe:
+
+| Signal in conversation | Type | Where |
+|---|---|---|
+| User corrects approach ("don't", "stop", "always", "prefer") | feedback | `memory/feedback_*.md` |
+| User confirms a non-obvious choice ("yes exactly", "perfect") | feedback | `memory/feedback_*.md` |
+| New deadline, blocker, or decision stated | project | `memory/project_*.md` |
+| User states role, tool preference, or workflow | user | `memory/user_*.md` |
+| Architecture rule or invariant established | project | `memory/project_*.md` |
+| Session ends with an unresolved blocker | project | `memory/project_*.md` |
+
+Do NOT save: code patterns (read the code), git history, ephemeral task state, secrets.
+
+Session start: recall with `observe_search` / `memory_health` (Codex's own tools —
+the Claude variant uses claude-mem for the same step). Load only relevant slices and
+confirm in one line. Session end: promote staged candidates into real memory files if
+they meet the criteria above, applying the Memory Hygiene rules below.
+
+## Context Compression
+
+**What to keep and drop when context is compressed** — preserve active task state,
+key decisions, exact file paths, error strings, tickers/IDs, and any user-stated
+constraints. Drop resolved reasoning, superseded plans, and verbose tool output
+already acted on.
+
+The Claude variant of this file also documents `autoCompactEnabled`,
+`autoCompactWindow` and `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. Those are **Claude Code
+settings and environment keys and do not exist for Codex CLI** — deliberately not
+copied here, because a config key that silently does nothing is worse than no
+guidance (that is exactly how `compactThreshold` sat in a settings file doing
+nothing until it was verified and removed on 2026-08-31). For Codex, use
+`session-rollover status` and the token thresholds in the automation section below.
+
+## Session Rollover
+
+Enforce at the threshold the tooling actually uses: `TEA_ROLLOVER_TURNS`,
+**default 12** (see the automation section below). Do not wait for context to fill.
+
+This number differs from the Claude variant on purpose. Claude Code fires its own
+turn-counter hook at 8, so that file says 8-10; Codex rolls over on TEA's threshold.
+Stating 8-10 here would be prose contradicting the implementation in the same file.
+
+1. Write a compact handoff to the memory vault: project label, current state, next
+   actions, open blockers.
+2. Tell the user the turn count and that the handoff is saved, and suggest a fresh
+   session for clean context.
+3. Stop adding new work after the handoff.
+
+Rationale: work tends to continue until the session breaks. Proactive rollover
+prevents context drift and lost state — **the handoff IS the continuity**, so it is
+written before it is needed, not when the session is already failing.
+
+Rollover stays in the same Codex project/workspace and the same cwd/repo unless the
+user explicitly asks to move. Turn/token thresholds and `session-rollover status`
+are covered in the automation section below.
 
 ## Memory Hygiene — volatile facts and pending items
 
