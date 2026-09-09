@@ -62,6 +62,52 @@ source files. Only read raw files to edit specific lines.
    agent, brief it like a colleague who knows nothing of this session — file
    paths, concrete context, what's already ruled out.
 
+## Memory Hygiene — volatile facts and pending items
+
+Applies to every handoff and memory file this pipeline writes (rule 5 above).
+Changes HOW memory is written — no new store, no new file, no new tooling.
+
+1. **A volatile fact carries how to re-verify it**, inline:
+
+       - [VOLATILE: re-run scripts/check_graph_fresh.py] graph FRESH at commit 4adcfab
+       - [VOLATILE: check `git log`] other session holds uncommitted edits
+       - [VOLATILE: netstat + /api/health] server restart still pending
+
+   Never repeat a `[VOLATILE: ...]` line as current without running its stated
+   check first — including if you wrote it yourself, minutes ago.
+
+   NOT volatile: rules, decisions, root causes, measured constants, "why we
+   chose X". Those are the memory worth keeping. Do not mark them, or the
+   marker stops meaning anything.
+
+2. **Pending items are checkbox facts, not prose:**
+
+       - [ ] OPEN — restart 8766; carries the row-801 base_count fix
+       - [x] DONE 4adcfab — polymarket probe gap (rows 812/813)
+       - [~] SUPERSEDED — see project_pending_master_2026-09-09
+
+   Prose hides its own staleness: nothing shows that line 40 went false while
+   line 12 stayed true, so the file rots as a unit and is re-read as uniformly
+   current. A checkbox flips in one character; a paragraph needs a rewrite,
+   which is why it does not happen.
+
+3. **Any file using this notation carries the key inline, at the top.** An
+   encoding whose meaning lives in a different file is not readable — a reader
+   sees `[~] SUPERSEDED` with nothing saying it is binding. Four lines of
+   legend costs nothing.
+
+4. **One pending file per project per day.** Never a topic suffix: a variant
+   name creates a second competing "READ FIRST" and a reader cannot tell which
+   is current. Concurrent sessions each own a `## Session <id8>` section and
+   edit only their own; `memory-vault/session-state/<session-id>.json` already
+   keys state by session, so nothing new is needed for that.
+
+Evidence, one session, 2026-09-08: three memory lines went false within hours of
+being written ("those test failures are open" — just fixed; "graph FRESH at
+<sha>" — true for minutes; "other session has uncommitted edits" — they
+committed). A 179-line prose handover kept asserting a fixed item was open
+because marking it done meant rewriting the paragraph around it.
+
 ## Project Ledgers — bugs & mistakes (per-project, not memory-vault)
 
 Two plain files live inside each project's own repo — NOT in `memory-vault`,
