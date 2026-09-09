@@ -8,6 +8,13 @@ Codex hook directory) — Codex automation runs through an MCP server, `tea.js` 
 calls, and the `notify` command in `config.toml`. See "Wiring" below for the real
 setup steps.
 
+
+**This file is project-agnostic.** Project-specific tooling — an MCP server's tool list,
+a market/domain vocabulary, one repo's conventions — belongs in that project's own
+`AGENTS.md`, not here. Observed drift, 2026-09-09: a live copy had accumulated a 22-line
+block listing one project's MCP tools, which stayed in the global config long after that
+project stopped using Codex, and was loaded into every unrelated session.
+
 ## Communication style (Caveman — always on)
 
 Respond terse. Drop: articles, filler words (just/really/basically), pleasantries
