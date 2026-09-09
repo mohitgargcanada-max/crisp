@@ -122,6 +122,21 @@ def _scan_mistakes(msgs):
         # admission. Without this, a write-up *about* a bug gets logged as if it
         # were the bug — the ledger fills with the prose describing the problem.
         if "|---" in text or "| ---" in text: continue
+        # Skip THIS HOOK'S OWN Stop feedback. Fixed 2026-09-09 after the ledger
+        # grew 44 -> 52 entries in one day across three sessions, six of them
+        # containing the words "Stop hook feedback" nested inside each other.
+        # The cycle is closed and self-amplifying: the hook writes an entry
+        # containing "I should have"; on the next Stop it injects that entry
+        # back into the transcript as feedback; this scanner then reads its own
+        # feedback, matches the very phrase it just wrote, and logs it again one
+        # level deeper. The `|---` guard above does not catch it because the
+        # feedback is a bullet list, not a table. Every turn made it worse, and
+        # it degrades the signal for every project, since the hook's whole job
+        # is to surface REAL past mistakes at the moment they are about to
+        # recur.
+        if ("Stop hook feedback" in text
+                or "repeat a mistake already logged" in text):
+            continue
         for pat in MISTAKE_PATTERNS:
             if re.search(pat, text, re.IGNORECASE):
                 s = text[:220].replace("\n"," ")
