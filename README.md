@@ -319,5 +319,9 @@ that copies instead of distils, one concept stored in three places, doc rules th
 hooks silently win, and pruning without measuring), are written up in
 **[docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md)**.
 
+For a course-style introduction aimed at people new to this — prompting, context
+engineering, the harness and hooks, scaffolding, the token-saving toolchain and how the whole
+pipeline fits together — see **[docs/AGENT_ENGINEERING_101.md](docs/AGENT_ENGINEERING_101.md)**.
+
 Read it before building your own memory layer. Every rule in it came from a real defect on a
 system its owner considered well built.
