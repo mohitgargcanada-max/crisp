@@ -307,3 +307,17 @@ in [CREDITS.md](CREDITS.md); exact upstream licenses per dependency in
 **License:** MIT for CRISP's own code and the merged `engine/` — see
 [LICENSE](LICENSE). Third-party skills keep their own upstream license; see
 THIRD_PARTY_NOTICES.md before redistributing further.
+
+## Memory architecture
+
+CRISP keeps agent memory in a vault that is **project-wise and session-wise**:
+`memory-vault/projects/<project>/handovers/<date>_<session-id>.md`, with session state keyed by
+session id. The vault itself is gitignored — your project memory never leaves your machine.
+
+The design, and the five failure modes that shaped it (telemetry mistaken for memory, capture
+that copies instead of distils, one concept stored in three places, doc rules that drift while
+hooks silently win, and pruning without measuring), are written up in
+**[docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md)**.
+
+Read it before building your own memory layer. Every rule in it came from a real defect on a
+system its owner considered well built.
