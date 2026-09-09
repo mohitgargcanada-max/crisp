@@ -344,12 +344,34 @@ function learnInstinctFromPrompt({ memoryDir, payload = {}, project = "" }) {
   if (!/\b(always|never|remember|from now on|for this project|preference|prefer)\b/i.test(text)) return null;
   if (/(api[_-]?key|secret|password|passwd|oauth|bearer\s+[a-z0-9._-]+|sk-[a-z0-9_-]{12,}|token\s*[:=]|private key|recovery phrase)/i.test(text)) return null;
 
+  // A directive is not a description. "always run tests" is a standing rule;
+  // "X is always incremental" is a statement of fact and must never become a
+  // preference. Storing the raw prompt prefix conflated the two: it captured
+  // "i thought graifyf is always incremental" and "u will always find darvas"
+  // as 0.75-confidence preferences and replayed them into every prompt.
+  const DESCRIPTIVE = /\b(?:is|are|was|were|will|would|has|have|had|thought|think|thinks|seems|seemed|feels|becomes|got|gets)\s+(?:not\s+)?(?:always|never)\b/i;
+  const DIRECTIVE = /(?:^|[.!?;:,]\s*|\b(?:so|and|but|then|also|please)\s+)((?:please\s+)?(?:always|never|from now on|remember to|make sure to|be sure to|don'?t)\b[^.!?;]{4,180})/i;
+  const PREFER = /((?:i\s+)?prefer\s+[^.!?;]{4,180})/i;
+
+  // Judge each clause alone, so a descriptive "always" cannot drag in an
+  // unrelated directive elsewhere in the message, or vice versa.
+  let action = null;
+  for (const clause of text.split(/(?<=[.!?;])\s+|\s*\.{3,}\s*/)) {
+    const c = clause.trim();
+    if (c.length < 12 || c.length > 200) continue;
+    if (DESCRIPTIVE.test(c)) continue;
+    if (/\?\s*$/.test(c)) continue;
+    const m = DIRECTIVE.exec(c) || PREFER.exec(c);
+    if (m) { action = m[1].trim(); break; }
+  }
+  if (!action) return null;
+
   const scoped = /\b(for this project|in this repo|this repo|this project)\b/i.test(text);
   return saveInstinct(memoryDir, {
     scope: scoped ? "project" : "global",
     project,
     trigger: "user-stated preference",
-    action: text.slice(0, 300),
+    action: action.slice(0, 300),
     domain: "preference",
     confidence: scoped ? 0.8 : 0.75,
     evidence: "captured from explicit user wording",
