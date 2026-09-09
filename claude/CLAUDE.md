@@ -107,6 +107,13 @@ narrative handover kept asserting a fixed item was open, because marking it done
 would have meant rewriting the paragraph it lived in. A checkbox flips in one
 character.
 
+**Every file using this notation carries the key inline, at the top.** The tokens above
+are an encoding, and an encoding whose meaning lives in a different file is not readable:
+someone opening the memory file sees `[~] SUPERSEDED` with nothing telling them it is
+binding, or that `[VOLATILE:]` obliges them to re-check before repeating the line. Four
+lines of legend at the top costs nothing and makes the file self-contained. (Same rule this
+repo already learned the hard way about colour-coded charts with no key anywhere.)
+
 **One file per project per day**, per the Auto-Commit rule above — never a topic
 suffix (`..._2026-09-08-news.md` created a SECOND competing "READ FIRST" entry
 alongside the dated file, and a reader cannot tell which is current). When several
