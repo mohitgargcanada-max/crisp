@@ -6,6 +6,54 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.2] — 2026-09-09
+
+### Fixed
+
+- **The context-usage notice was scored against a hardcoded 200k window, so it was wrong
+  on every 1M-context model — and wrong in the direction that causes harm.**
+
+  `contextWindowTokens()` in `engine/lib/hook-runtime.js` returned 1,000,000 only when the
+  model *name* contained the literal string `"1m"`, and 200,000 otherwise. No Claude model
+  id contains `"1m"`. Measured on `claude-opus-5`: the hook injected
+  `Token-kit context: about 198k tokens (99% of 200k window). Prepare a compact handoff`
+  into every turn while the client's own meter read **20%** — 198k of a real 1M window.
+
+  The failure mode is the point. A heuristic keyed on a string the real inputs never
+  contain does not fail loudly; it silently applies its fallback to exactly the models it
+  most needed to get right, and it looked like a conservative default while doing so. The
+  practical cost was agents being pushed to hand off and start fresh chats at a fifth of
+  the context they actually had.
+
+  Window detection now resolves in order: the `TEA_CONTEXT_WINDOW` env override, a literal
+  `"1m"` in the model id, the family pattern `/(opus|sonnet|fable)-(5|[6-9])/`, the
+  pre-existing observed-tokens backstop (a session already past 200k cannot be on a 200k
+  window), then 200,000. Haiku 4.5 correctly stays on 200k.
+
+### Changed
+
+- **The context warning is now a fraction of the real window, not an absolute constant.**
+  `contextThreshold()` returned one of two hardcoded token counts (160k / 250k), which is
+  why a wrong window produced both a wrong percentage *and* a wrong warning point. It is
+  now `CONTEXT_WARN_FRACTION` (0.70) times the detected window — 700k on a 1M model, 140k
+  on a 200k model. `TEA_CONTEXT_THRESHOLD` still overrides with an absolute count.
+
+- **`contextWindowTokens` and `contextWindowForTranscript` are now exported.** The bug was
+  one wrong constant in one place; a second copy of the model list in another hook would
+  re-create it at the next model launch. Callers resolve the window through this one
+  definition instead.
+
+- **The turn counter shipped in `claude/settings.json` fired at a hardcoded 8**, while the
+  lifecycle hook reads `TEA_ROLLOVER_TURNS` and `session-rollover.js` defaults to 12 —
+  three numbers for one policy, silently disagreeing. It now reads `TEA_ROLLOVER_TURNS`
+  (falling back to 12) and prints the threshold it used.
+
+### Note
+
+The turn-count rollover policy itself is deliberately left alone. It is a user preference,
+not a window assumption, and lowering or raising it is a judgment call for whoever runs
+CRISP — the context-based trigger above is the part that was factually broken.
+
 ## [0.1.1] — 2026-09-08
 
 ### Fixed

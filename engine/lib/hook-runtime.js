@@ -130,16 +130,33 @@ function readTranscriptUsage(transcriptPath) {
 }
 
 function contextWindowTokens(model, latestContextTokens) {
+  // Explicit override wins, e.g. TEA_CONTEXT_WINDOW=1000000.
+  const env = Number(process.env.TEA_CONTEXT_WINDOW);
+  if (Number.isFinite(env) && env > 0) return env;
   const lower = String(model || "").toLowerCase();
-  if (lower.includes("1m") || latestContextTokens > 200000) return 1000000;
+  // Matching only the literal string "1m" scored every 1M-window model against
+  // 200k. Measured 2026-09-09 on claude-opus-5: this hook reported "198k tokens
+  // (99% of 200k window)" and pushed for a handover while the client's own
+  // meter read 20% -- 198k of a real 1M window. The model name never contains
+  // "1m", so the fallback silently applied to the models it most needed to get
+  // right. Name the families instead, and keep the observed-tokens escape hatch
+  // below as a backstop for a model this list does not know yet.
+  if (lower.includes("1m")) return 1000000;
+  if (/(opus|sonnet|fable)-(5|[6-9])/.test(lower)) return 1000000;
+  if (latestContextTokens > 200000) return 1000000;
   return 200000;
 }
+
+const CONTEXT_WARN_FRACTION = 0.70;
 
 function contextThreshold(windowTokens) {
   const value = process.env.TEA_CONTEXT_THRESHOLD;
   const raw = value === undefined || value === "" ? Number.NaN : Number(value);
   if (Number.isFinite(raw) && raw >= 0) return raw;
-  return windowTokens > 200000 ? 250000 : 160000;
+  // Warn at a FRACTION of the real window (Mohit, 2026-09-09: "make it 70%").
+  // Previously two absolute constants (160k / 250k), which is why a wrong
+  // window produced both a wrong percentage and a wrong warning point.
+  return Math.round(windowTokens * CONTEXT_WARN_FRACTION);
 }
 
 function contextInterval() {
@@ -168,6 +185,19 @@ function readJson(file, fallback) {
 function writeJson(file, value) {
   ensureDir(path.dirname(file));
   fs.writeFileSync(file, JSON.stringify(value, null, 2), "utf8");
+}
+
+// Exported so other hooks resolve the window through this one definition. The
+// 2026-09-09 bug was a single wrong constant read in a single place; a second
+// copy of the model list elsewhere would re-create it on the next model launch.
+function contextWindowForTranscript(transcriptPath) {
+  const usage = readTranscriptUsage(transcriptPath);
+  if (!usage) return null;
+  return {
+    windowTokens: contextWindowTokens(usage.total.model, usage.latestContextTokens),
+    latestContextTokens: usage.latestContextTokens,
+    model: usage.total.model,
+  };
 }
 
 function contextSuggestion({ memoryDir, sessionId, transcriptPath }) {
@@ -379,9 +409,12 @@ function learnInstinctFromPrompt({ memoryDir, payload = {}, project = "" }) {
 }
 
 module.exports = {
+  CONTEXT_WARN_FRACTION,
   END_EVENTS,
   activeInstinctContext,
   contextSuggestion,
+  contextWindowForTranscript,
+  contextWindowTokens,
   learnInstinctFromPrompt,
   readCostSnapshots,
   readInstincts,

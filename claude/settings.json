@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NonInteractive -Command \"$f='<CLAUDE_HOME>\\turn_counter.txt'; $n=0; if(Test-Path $f){$n=[int](Get-Content $f -Raw)}; $n++; Set-Content $f $n; if($n -ge 8){ Write-Host '[ROLLOVER] Turn ' + $n + ' — write handoff to memory vault and suggest fresh chat.' }\""
+            "command": "powershell -NonInteractive -Command \"$f='<CLAUDE_HOME>\\turn_counter.txt'; $n=0; if(Test-Path $f){$n=[int](Get-Content $f -Raw)}; $n++; Set-Content $f $n; $t=if($env:TEA_ROLLOVER_TURNS){[int]$env:TEA_ROLLOVER_TURNS}else{12}; if($n -ge $t){ Write-Host '[ROLLOVER] Turn ' + $n + ' of ' + $t + ' — write handoff to memory vault and suggest fresh chat.' }\""
           }
         ]
       },
