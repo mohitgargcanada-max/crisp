@@ -70,3 +70,31 @@ dismiss it by reflex, and a gate dismissed by reflex is worse than no gate at al
 
 *(`auto_handover.py` lives in `~/.claude/hooks/`, outside this repo, so only this ledger entry
 is committed here.)*
+
+## 2026-09-10 — auto_handover.py drifted out of sync for 3 days on a false belief
+
+**Symptom.** Four real fixes to `auto_handover.py` (2026-09-08 through 2026-09-10 — `_user_said`/
+`_clause_around`, the whitespace-stdin crash, `_wrote_this_turn`/`_vault_dir`, and `_repo_root`)
+were applied only to the live `~/.claude/hooks/auto_handover.py` and never committed here. The
+repo and live copies had been explicitly verified identical on 2026-08-31; by 2026-09-10 they had
+diverged by 8.5 KB and four functions.
+
+**Root cause.** The 2026-09-09 BUGS.md entry for the read-only-turn fix stated: *"auto_handover.py
+lives in ~/.claude/hooks/, outside this repo, so only this ledger entry is committed here."* That
+is false — `claude/hooks/auto_handover.py` has been tracked in this repo since the initial commit
+(`b76fd94`, 2026-08-10) and `install.ps1`/`install.sh` copy it with `-Force` on every install. A
+session asserted the file was out-of-repo without checking, and the next three fixes inherited the
+belief uncorrected. Found during an Aurora gatway session auditing why its own `_repo_root` fix
+(same file, row 850 in that project's tracker) had no CRISP-side commit.
+
+**Fix.** Copied the live copy (superset of the repo copy — diffed, confirmed zero functions unique
+to the repo version) back over `claude/hooks/auto_handover.py`. Byte-identical to the live copy,
+confirmed by hash compare. Backup of the pre-sync repo version at
+`claude/hooks/auto_handover.py.bak-20260910-pre-sync`. Corrected here rather than editing the
+2026-09-09 entry's false footnote, per this project's own memory-hygiene rule against silently
+rewriting a prior record.
+
+**Why it mattered.** `install.ps1` is unconditional (`Copy-Item ... -Force`) with no diff check
+and no warning — the next install anywhere would have silently reverted all four fixes, including
+the Stop-hook blocking mechanism that itself exists to prevent exactly this class of repeated,
+undetected mistake. Status: FIXED.
