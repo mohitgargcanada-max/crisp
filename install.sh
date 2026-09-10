@@ -22,8 +22,23 @@ echo "========================="
 mkdir -p "$HOOKS" "$SKILLS" "$CODEX"
 
 # 2. Copy Claude Code hooks
+# Drift guard (added 2026-09-10): four real fixes to auto_handover.py were
+# made directly against the live ~/.claude/hooks/ copy over three days and
+# never ported back to this repo, on a false belief that the file lived
+# outside it. The unconditional overwrite below would have silently
+# discarded every one of them on the next run. Back up a live hook before
+# overwriting it ONLY when its content actually differs from the repo copy
+# about to replace it, so a real divergence is never silently lost.
 echo ""
 echo "Installing Claude Code hooks..."
+for f in "$CRISP/claude/hooks/"*.py; do
+    dst="$HOOKS/$(basename "$f")"
+    if [ -f "$dst" ] && ! cmp -s "$f" "$dst"; then
+        backup="$dst.pre-install-backup-$(date +%Y%m%d-%H%M%S)"
+        cp "$dst" "$backup"
+        echo "  ! $(basename "$f") differs from the live copy -- backed up to $(basename "$backup")"
+    fi
+done
 cp "$CRISP/claude/hooks/"*.py "$HOOKS/"
 echo "  ✓ headroom_filter.py   -> ~/.claude/hooks/"
 echo "  ✓ auto_handover.py     -> ~/.claude/hooks/"

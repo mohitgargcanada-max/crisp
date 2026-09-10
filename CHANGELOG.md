@@ -6,6 +6,35 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.3] — 2026-09-10
+
+### Fixed
+
+- **`auto_handover.py`'s ledger, watermark, and vault-staging paths were derived from the
+  session's raw cwd, so a session started in ANY subdirectory of a project silently minted a
+  second `.crisp/MISTAKES.md` (and a second vault "project") there instead of resolving to the
+  actual one.** Discovered when an Aurora gatway session found its mistake ledger had split
+  three ways — 81 entries at the repo root, 11 in a stray, 1 in another — and the Stop-hook
+  enforcement gate had been silently checking a partial file the whole time. Added `_repo_root()`,
+  which walks up from cwd to the nearest `.git` and anchors all three paths on it.
+
+- **The repo copy of `auto_handover.py` had silently drifted 8.5 KB behind the live
+  `~/.claude/hooks/` copy it is supposed to mirror.** Four real fixes over three days
+  (`_user_said`/`_clause_around`, a whitespace-stdin crash, `_wrote_this_turn`/`_vault_dir`, and
+  `_repo_root` above) were applied only to the live file, on the strength of a false footnote in
+  this project's own `.crisp/BUGS.md` claiming the file "lives outside this repo." It has been
+  tracked here since the initial commit. Resynced the repo copy to match the live copy exactly
+  (hash-verified).
+
+### Changed
+
+- **`install.ps1` / `install.sh` no longer silently overwrite a diverged local hook.** Before
+  copying `claude/hooks/*.py` over `~/.claude/hooks/`, each installer now hashes the existing
+  live file against the one about to replace it; if they differ, the live copy is backed up to
+  `<file>.pre-install-backup-<timestamp>` first. The install still proceeds — this doesn't block
+  onboarding — but a real local fix can no longer vanish without a trace the way this one did.
+  Verified behaviorally on both platforms with a synthetic diverged-file case before landing.
+
 ## [0.1.2] — 2026-09-09
 
 ### Fixed

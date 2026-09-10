@@ -23,7 +23,23 @@ New-Item -ItemType Directory -Force -Path $SKILLS | Out-Null
 New-Item -ItemType Directory -Force -Path $CODEX  | Out-Null
 
 # 2. Copy Claude Code hooks
+# Drift guard (added 2026-09-10): four real fixes to auto_handover.py were
+# made directly against the live ~/.claude/hooks/ copy over three days and
+# never ported back to this repo, on a false belief that the file lived
+# outside it. install.ps1's unconditional -Force overwrite would have
+# silently discarded every one of them on the next run. Back up a live hook
+# before overwriting it ONLY when its content actually differs from the repo
+# copy about to replace it, so a real divergence is never silently lost.
 Write-Host "`nInstalling Claude Code hooks..."
+Get-ChildItem "$CRISP\claude\hooks\*.py" | ForEach-Object {
+    $src = $_.FullName
+    $dst = Join-Path $HOOKS $_.Name
+    if ((Test-Path $dst) -and ((Get-FileHash $dst -Algorithm SHA256).Hash -ne (Get-FileHash $src -Algorithm SHA256).Hash)) {
+        $backup = "$dst.pre-install-backup-$(Get-Date -Format yyyyMMdd-HHmmss)"
+        Copy-Item $dst $backup
+        Write-Host "  ! $($_.Name) differs from the live copy -- backed up to $(Split-Path $backup -Leaf)" -ForegroundColor Yellow
+    }
+}
 Copy-Item "$CRISP\claude\hooks\*.py" $HOOKS -Force
 Write-Host "  headroom_filter.py   -> ~/.claude/hooks/" -ForegroundColor Green
 Write-Host "  auto_handover.py     -> ~/.claude/hooks/" -ForegroundColor Green
