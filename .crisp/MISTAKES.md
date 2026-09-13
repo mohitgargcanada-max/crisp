@@ -28,3 +28,7 @@ known-bad inputs — and even then I first misread the symptom as the regex bein
 - Never accept "it imports" / "it parses" as evidence a fix works. Test the behaviour with cases
   that must pass AND cases that must fail. Both directions, or the test proves nothing.
 - Check for control characters after generating source: `grep -P '[\x00-\x08]'`.
+
+## 2026-09-09 18:57 | bddc2b1a
+
+## 2026-09-13 09:04 | scan-rw_

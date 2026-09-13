@@ -98,3 +98,31 @@ rewriting a prior record.
 and no warning — the next install anywhere would have silently reverted all four fixes, including
 the Stop-hook blocking mechanism that itself exists to prevent exactly this class of repeated,
 undetected mistake. Status: FIXED.
+
+## 2026-09-13 — mistake ledger captured conversational prose as a lesson
+
+**Symptom.** `.crisp/MISTAKES.md` contained this, scraped verbatim mid-sentence with its
+trailing colon: "Correct - and I should have said that rather than naming only Aurora.
+`memory-vault/*` is a wildcard ... Verifying across all of them rather than asserting it:".
+Once written it was replayed as a lesson on every later write turn.
+
+**Root cause.** Two independent defects, both the same family as the memory-capture bugs fixed
+2026-09-09:
+1. `I should have` was in `MISTAKE_PATTERNS`. It is the loosest phrase there and fires on
+   ordinary conversational acknowledgement, not on an error worth remembering.
+2. `_scan_mistakes` stored `text[:220]` — the message *prefix*, not the matching sentence — so
+   even a genuine admission deep in a message saved unrelated preamble.
+
+There was also no requirement that the turn have changed anything. A lesson worth keeping comes
+from a turn that did something.
+
+**Fix.** Dropped `I should have` (remaining phrases all name an actual error: "I broke", "I was
+wrong", "I misunderstood"). `_scan_mistakes` now uses `_clause_around` to store the sentence
+containing the admission. The scan is gated on `_wrote_this_turn`, computed before the scan so
+it gates both the scan and the review gate — reusing the existing detector rather than adding a
+second mechanism.
+
+6/6 unit cases pass (the exact polluting sentence rejected, genuine admissions logged, analysis
+prose rejected) and end-to-end: a read-only turn containing "I was wrong" writes nothing, a
+write turn containing "I broke ..." writes one entry. Polluted entry and the test artifact
+removed; ledger back to 4 real lessons. Status: FIXED.
