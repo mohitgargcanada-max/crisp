@@ -6,6 +6,42 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.6] — 2026-09-13
+
+### Added
+
+- **A pre-commit check that fails when `claude/hooks/*.py` has drifted from the installed
+  `~/.claude/hooks/*.py`.** Three consecutive releases shipped a hook resync (0.1.3 fixed the
+  drift, 0.1.4 and 0.1.5 each resynced again). The 0.1.3 installer backup limits the damage but
+  nothing ever *failed*, so drift was caught only when somebody happened to look. Now the commit
+  stops, names which file is ahead and by how many lines, and prints the exact `cp` to run.
+
+  Install per clone (`.git/hooks` is not tracked):
+
+      cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+  **It is built to fail open.** The commit proceeds if python is missing, if the repo root cannot
+  be resolved, if the checker is absent, if `~/.claude/hooks/` does not exist (a fresh clone or
+  CI), if a counterpart file is missing, if a file is unreadable, or if the checker raises
+  anything at all. The only condition that blocks is a readable pair whose normalised contents
+  genuinely differ — and `git commit --no-verify` bypasses even that, deliberately, so an
+  emergency commit is always possible.
+
+  Line endings are flattened before comparison — CRLF, lone CR, and trailing newlines all
+  normalise away. This is the part that had to be right: git checks the repo copy out as CRLF
+  while the live copy is LF, so a naive byte comparison would report drift on every commit and
+  lock the repo permanently. That failure was caught by the test suite before install, not after.
+
+  Verified with 9 unit cases (every line-ending permutation allowed; real drift in either
+  direction blocked; a one-character content difference blocked) and 4 end-to-end cases driving
+  real `git commit` in a throwaway repo: in-sync commits succeed, drifted commits are blocked
+  with the filename and line delta, `--no-verify` bypasses, and a commit succeeds again once
+  resynced.
+
+  The installers are deliberately left untouched — adding hook installation to `install.ps1` /
+  `install.sh` would put this in everyone's path on the next install, and it has one day of
+  evidence behind it. Left as an opt-in line to run.
+
 ## [0.1.5] — 2026-09-13
 
 ### Fixed

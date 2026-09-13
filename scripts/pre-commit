@@ -1,0 +1,19 @@
+#!/bin/sh
+# CRISP pre-commit hook: block a commit while claude/hooks/*.py has drifted from the
+# installed ~/.claude/hooks/*.py copies.
+#
+# Install (per clone -- .git/hooks is not tracked by git):
+#     cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Fails OPEN at every step. If python is missing, the repo root cannot be resolved, or the
+# checker is absent, the commit proceeds as normal. The only thing that blocks is the checker
+# itself reporting real drift, and that is bypassable with:
+#     git commit --no-verify
+
+command -v python >/dev/null 2>&1 || exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -n "$root" ] || exit 0
+[ -f "$root/scripts/check_hook_sync.py" ] || exit 0
+
+python "$root/scripts/check_hook_sync.py"
