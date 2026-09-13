@@ -40,8 +40,15 @@ MEMORY_PATTERNS = {
 # bug. "root cause was" and "this broke because" were removed — they match
 # ordinary fix reports ("root cause was X, now fixed"), which is how live
 # ledgers filled up with successes mislabelled as mistakes.
+# "I should have" was removed 2026-09-13. It is the loosest phrase here and fires on
+# ordinary conversational acknowledgement, not on an admission worth remembering. It
+# scraped this sentence into the ledger verbatim, mid-sentence and trailing colon
+# included: "Correct - and I should have said that rather than naming only Aurora.
+# `memory-vault/*` is a wildcard ... Verifying across all of them rather than asserting
+# it:". That is not a lesson, and once written it was replayed as one on every later
+# write turn. The remaining phrases all name an actual error ("I broke", "I was wrong").
 MISTAKE_PATTERNS = [
-    r"I made a mistake", r"that was wrong", r"my bad\b", r"I should have",
+    r"I made a mistake", r"that was wrong", r"my bad\b",
     r"I was wrong", r"I broke\b",
     r"my mistake", r"I misunderstood", r"I got that wrong",
 ]
@@ -96,7 +103,31 @@ def _read_transcript(transcript_path: str):
                             for key in ("file_path", "path", "notebook_path"):
                                 val = inp.get(key)
                                 if isinstance(val, str) and val:
-                                    files.add(Path(val).name.lower())
+                                    # Real bug found 2026-09-13 (Mohit: "dig deeper on
+                                    # dcr acronym issue as they keep appearing"): `path`
+                                    # is also how Bash/Grep/Glob address a DIRECTORY, not
+                                    # just how Edit/Write/Read address a file. Without
+                                    # this suffix check, a single directory-scoped tool
+                                    # call anywhere in the transcript (e.g. a path ending
+                                    # in ".../aurora_scanner") adds that bare directory
+                                    # name to `files` forever (this function rescans the
+                                    # whole transcript every call, so the set only
+                                    # grows) -- and because a project-root directory
+                                    # name is a substring of nearly every file path
+                                    # under it, `_relevant_mistakes()`'s substring match
+                                    # then locks onto whichever single ledger bullet
+                                    # happens to spell out that fully-qualified path
+                                    # instead of a bare filename, and shows that SAME
+                                    # entry on every subsequent Stop for the rest of the
+                                    # session regardless of what's actually being
+                                    # touched. A directory basename essentially never
+                                    # has a dot-extension, so requiring one is a cheap,
+                                    # honest filter -- same "basename only, not
+                                    # semantic" philosophy this function already uses,
+                                    # not a new kind of check.
+                                    p = Path(val)
+                                    if p.suffix:
+                                        files.add(p.name.lower())
                     text = " ".join(texts)
                 else:
                     text = str(content)
@@ -195,9 +226,13 @@ def _scan_mistakes(msgs):
                 or "repeat a mistake already logged" in text):
             continue
         for pat in MISTAKE_PATTERNS:
-            if re.search(pat, text, re.IGNORECASE):
-                s = text[:220].replace("\n"," ")
-                if s not in found: found.append(s)
+            hit = re.search(pat, text, re.IGNORECASE)
+            if hit:
+                # Store the sentence containing the admission, not the first 220 chars of
+                # the message. Same defect _categorize had: a match deep in a long message
+                # saved unrelated preamble instead of the thing that matched.
+                s = _clause_around(text, hit.start(), 220)
+                if len(s) >= 12 and s not in found: found.append(s)
                 break
     return found
 
@@ -501,11 +536,18 @@ def main():
     # gets through; this stops the repeat from being considered at all.
     watermark = _load_watermark(cwd, session_id)
     new_msgs = all_msgs[watermark:] if watermark < len(all_msgs) else []
-    mistakes = _scan_mistakes(new_msgs)
-    _save_mistakes(session_id, cwd, mistakes)
-    _save_watermark(cwd, session_id, len(all_msgs))
 
+    # A lesson worth keeping comes from a turn that actually changed something. Computed
+    # before the scan, not after, so it can gate the scan as well as the review gate:
+    # conversational acknowledgement on a read-only turn ("I should have said that rather
+    # than naming only Aurora") was being written to the ledger as a durable mistake, then
+    # replayed as one on every later write turn.
     wrote = _wrote_this_turn(transcript_path) if transcript_path else True
+
+    if wrote:
+        mistakes = _scan_mistakes(new_msgs)
+        _save_mistakes(session_id, cwd, mistakes)
+    _save_watermark(cwd, session_id, len(all_msgs))
     gate = _review_gate(cwd, bool(event.get("stop_hook_active")), touched_files, wrote)
     if gate:
         print(json.dumps(gate))

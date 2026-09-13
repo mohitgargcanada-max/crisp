@@ -6,6 +6,104 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.4] — 2026-09-13
+
+Theme: every fix below is the same defect wearing a different hat — **a detector matched loosely
+and then stored raw text instead of a distilled fact.** Five instances were found across three
+sessions. They are listed separately because they were found separately, but they are one design
+assumption repeated in five places.
+
+### Added
+
+- **`docs/MEMORY_ARCHITECTURE.md`** — the memory model (project-wise and session-wise vault,
+  telemetry kept separate, memory gitignored) and the five failure modes it exists to avoid.
+  Each rule is paired with the measured evidence that produced it rather than with reasoning:
+  a 4.7 MB event log mistaken for a memory store, a capture path that replayed raw user
+  fragments into every prompt, one concept stored in three places where the documented path was
+  0 bytes, an instruction file holding two drifted copies of its own rules, and 76 of 97 skills
+  carrying zero invocations across 28,388 transcripts.
+
+- **`docs/AGENT_ENGINEERING_101.md`** — a course-style guide: the four layers (prompting,
+  context engineering, harness, scaffolding), a map of the Claude files that matter and how this
+  repo uses each, the eight engineering rules, the token-saving toolchain, and the request
+  pipeline end to end. Includes a section written from the model's own perspective on what
+  actually changes its behaviour — enforced hooks over short rules over long prose.
+
+### Fixed
+
+- **Instinct capture stored descriptions as standing rules.** `engine/lib/hook-runtime.js`
+  `learnInstinctFromPrompt` gated on `always|never` appearing anywhere in a prompt, then stored
+  `text.slice(0, 300)` — the raw prefix. Descriptive use ("X *is always* incremental") is not
+  directive use ("*always run* X"), so ordinary statements of fact became 0.75-confidence
+  preferences and were replayed into every subsequent prompt. Two such entries were live:
+  a typo-laden half-sentence about base formulas, and "i thought graifyf is always incremental".
+  Now requires a directive clause, judges each clause independently, and stores only the matching
+  clause. A mixed message keeps "always run graphify before reading source" and drops the
+  descriptive half. Secrets filter unchanged. 10/10 cases, both directions.
+
+- **The mistake ledger logged conversational prose as a durable lesson.** Two defects:
+  `I should have` was in `MISTAKE_PATTERNS` (the loosest phrase there — it fires on ordinary
+  acknowledgement, not on an error), and `_scan_mistakes` stored `text[:220]`, the message
+  prefix rather than the matching sentence. Together they wrote a mid-sentence conversational
+  line into `.crisp/MISTAKES.md`, trailing colon included, which was then replayed as a lesson
+  on every later write turn. Dropped the phrase, switched to `_clause_around`, and gated the
+  scan on `_wrote_this_turn` — a lesson worth keeping comes from a turn that changed something.
+  6/6 cases plus end-to-end: a read-only turn containing "I was wrong" writes nothing; a write
+  turn containing "I broke ..." writes exactly one entry.
+
+- **The review gate interrupted turns that changed nothing.** It fell back to recent ledger
+  entries whenever `touched_files` was empty — and `touched_files` is wrong in both directions:
+  it collects `file_path` from **Read** as well as Edit/Write (a read-only turn looks like a
+  write), and never sees Bash-driven edits at all (heredocs, redirects, `sed -i`), which is how
+  most edits are made here. Added `_wrote_this_turn`, scoped to entries after the last real user
+  message, failing toward reviewing when the transcript cannot be read. A gate that interrupts
+  with nothing to check trains the reader to dismiss it by reflex.
+
+- **`path` also addresses directories, which poisoned mistake relevance.** `_read_transcript`
+  harvested `path` from any tool input, but Bash/Grep/Glob use it for a DIRECTORY. One
+  directory-scoped call anywhere in a transcript added that bare name to `files` permanently,
+  and since a project-root directory name is a substring of nearly every path beneath it, the
+  substring match locked onto a single ledger bullet and surfaced that same entry on every
+  subsequent Stop for the rest of the session. Now requires a dot-suffix — a directory basename
+  essentially never has one.
+
+- **The repo copy of `auto_handover.py` drifted again, immediately after 0.1.3 fixed that very
+  class.** The hook changes above were applied to the live `~/.claude/hooks/` copy and committed
+  only as ledger prose, so the tracked copy fell 42 lines behind and was additionally missing the
+  `path`-suffix fix. Resynced and content-verified (line endings normalised; the repo copy and
+  the live copy are now byte-identical after CRLF normalisation).
+
+  Worth recording plainly: 0.1.3 attributed the earlier drift to a false footnote in this
+  project's own `.crisp/BUGS.md` claiming the file "lives outside this repo". That footnote was
+  written by me, and I repeated the same claim in a later ledger entry before checking. The file
+  has been tracked since the initial commit. **The installer backup added in 0.1.3 limits the
+  damage but does not prevent the drift** — nothing yet fails when the two copies diverge.
+
+### Changed
+
+- **Staging moved into the vault.** It was a separate store at `~/.claude/memory-staging/` that
+  the docs did not even point at correctly — `CLAUDE.md` named `~/.claude/hooks/memory_staging.md`,
+  which was 0 bytes, so every "promote staged candidates" step silently no-opped while real
+  candidates accumulated elsewhere (490 KB of compaction boilerplate in one project). Staging is
+  now `<vault>/projects/<project>/staging.md`, beside the project it belongs to. The boilerplate
+  was cleared rather than promoted; promoting it would have poisoned the vault it was about to
+  be connected to.
+
+- **Handovers consolidated.** 33 documents across 12 projects moved from `~/.claude/handovers/`
+  into `<vault>/projects/<project>/handovers/`, retiring a second store that duplicated
+  `session-handoffs/`. The vault was also initialised from `engine/memory-templates/` for the
+  first time — it had never been `vault init`-ed, which is why hooks had been appending telemetry
+  into an empty folder and that log had become "the vault".
+
+### Known gaps
+
+- Nothing fails when `claude/hooks/*.py` and `~/.claude/hooks/*.py` diverge. The installer backs
+  up, but drift is still only caught by someone noticing. A CI check or a pre-commit hash
+  comparison would close it.
+- The five capture bugs above share one root assumption and were each fixed in place. A single
+  shared capture helper — match strictly, store a clause, require a write — would end the class
+  rather than waiting for the sixth instance.
+
 ## [0.1.3] — 2026-09-10
 
 ### Fixed

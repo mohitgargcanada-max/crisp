@@ -68,8 +68,11 @@ read-only turn, correctly reads as read-only) and end-to-end through the hook. S
 **Why it mattered.** A gate that interrupts when there is nothing to check trains the reader to
 dismiss it by reflex, and a gate dismissed by reflex is worse than no gate at all.
 
-*(`auto_handover.py` lives in `~/.claude/hooks/`, outside this repo, so only this ledger entry
-is committed here.)*
+*(~~`auto_handover.py` lives in `~/.claude/hooks/`, outside this repo, so only this ledger entry
+is committed here.~~ **CORRECTED 2026-09-13 — this footnote was false and caused real damage.**
+`claude/hooks/auto_handover.py` has been tracked here since the initial commit `b76fd94`. Written
+without checking, it was then inherited uncorrected by the next three fixes; see the 2026-09-10
+entry below. Left struck through rather than deleted, because the wrong belief is the lesson.)*
 
 ## 2026-09-10 — auto_handover.py drifted out of sync for 3 days on a false belief
 
