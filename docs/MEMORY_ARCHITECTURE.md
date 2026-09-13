@@ -1,4 +1,4 @@
-# Memory Architecture — and the five ways it goes wrong
+# Memory Architecture — and the six ways it goes wrong
 
 This guide exists because we made every mistake in it. Each rule below is followed by the
 evidence that produced it, measured on a real installation, not reasoned from theory.
@@ -89,8 +89,20 @@ survives out of context: *who* decided *what*, and *why*. If the detector cannot
 it should capture nothing. Silence beats noise, because noise is indistinguishable from signal
 once it is in the file.
 
+**It is a family, not a bug.** This same defect was eventually found in *five* places across
+three subsystems: the learned-preferences store, the staging queue, and — found last, months
+after the others — the mistake ledger, which logged the sentence "I should have said that rather
+than naming only Aurora" as a durable engineering lesson, trailing colon included, then replayed
+it as one on every subsequent turn. Each instance was fixed in place. Fixing them in place did
+not stop the class; the sixth was only a matter of time.
+
+The durable answer is one shared capture path that every detector must route through — match
+strictly, store a clause, require that the turn actually did something — rather than each site
+reimplementing the same three decisions and getting them wrong in its own way.
+
 **The tell.** Read ten random entries. If you cannot act on them without the original
-conversation, the capture is broken.
+conversation, the capture is broken. Then count how many places in your system can write a
+memory: that is how many copies of this bug you have.
 
 ---
 
@@ -136,7 +148,29 @@ be mechanized. Concretely:
 Where both exist, make the doc name the mechanism and its config key, so the two cannot drift
 apart silently. When a number appears in two places, one of them must be a pointer.
 
-**The tell.** Grep your instruction file for duplicate headings. Then diff the duplicates.
+**The proof, earned the hard way.** This repo ships `claude/hooks/*.py` and installs it over
+`~/.claude/hooks/`. Fixes get made to the *live* copy during a session, because that is the one
+actually running. Over three days the tracked copy fell 8.5 KB behind, on the strength of a
+footnote in this project's own bug ledger claiming the file "lives outside this repo" — written
+without checking, then inherited uncorrected by the next three fixes. It had been tracked since
+the initial commit.
+
+Then the interesting part. A release fixed it and added an installer backup. **The very next
+release drifted again. So did the one after that.** Three consecutive releases each shipped a
+resync, by people who had just read the entry explaining the problem. The third time, the only
+reason it was caught was that someone happened to be writing a changelog entry about forgetting.
+
+Nothing had ever *failed*. The rule was documented, understood, agreed with, and still lost —
+because a rule that relies on remembering is a rule that competes with whatever you were
+actually doing. The fix was a pre-commit check that exits non-zero when the two copies diverge.
+It has not drifted since, and it cannot, because the commit stops.
+
+If you take one thing from this document, take the gap between "we wrote it down" and "it cannot
+happen". Those are not the same control, and the distance between them is three releases.
+
+**The tell.** Grep your instruction file for duplicate headings. Then diff the duplicates. And
+for anything that must stay in sync, ask what *fails* when it doesn't — if the answer is
+"someone notices", it is not a control.
 
 ---
 
@@ -160,6 +194,50 @@ thing to find out.
 
 ---
 
+## Failure 6 — Your checks fail more often than your fixes
+
+**What happened.** In a single session fixing the five failures above, the fixes themselves
+survived. The things that broke were the *verifications*:
+
+- `grep -cP '[\x00-\x08]' file || echo 0` — `grep -c` prints `0` and exits non-zero, so the
+  fallback appended a second `0`. The two-line value failed a string comparison and printed
+  `*** CONTROL CHARS ***` for clean files.
+- `find dir -name '*.py' -o -name '*.js' -newermt '-10 minutes'` — `-newermt` binds only to the
+  second branch, so every `.py` matched regardless of age.
+- `mktemp -d` returned an MSYS path (`/tmp/...`) that Windows Python could not open, so a
+  correctly-working hook returned its fail-safe value and *looked* broken.
+- Generated regexes lost their word boundaries: `\b` inside a non-raw Python string is the
+  backspace character (0x08), so it was written to disk as an invisible control character. The
+  file parsed. The module imported. `node -e "require(...)"` printed "loads OK". The pattern
+  simply stopped matching, and the symptom read as an over-strict regex rather than a corrupted
+  one. `\s` survived untouched — it is not a valid Python escape — which made the corruption
+  look impossible.
+
+Four broken checks, zero surviving bugs in the actual fixes.
+
+**The near-miss.** The pre-commit check from Failure 4 was itself the sharpest example. Its first
+version compared raw bytes, so a CRLF-vs-LF difference read as drift — and git checks the repo
+copy out as CRLF while the live copy is LF. It would have blocked **every commit in the repo,
+forever**: far worse than the drift it existed to prevent. It was caught by a must-*allow* test
+case before installation, not by a must-block one.
+
+**The rule.**
+
+- Test both directions. Cases that must FAIL are worth as much as cases that must pass, and for
+  anything that blocks — a gate, a lint, a pre-commit hook — **the must-allow cases are where
+  the real danger lives.** A check that wrongly blocks is worse than the bug it hunts.
+- When a check produces a surprising result, suspect the check before the code, and confirm with
+  a second, different method before concluding anything.
+- "It parses", "it imports", "it loads" are not evidence a fix works. They are evidence the file
+  is syntactically valid, which was never in question.
+- When generating code, avoid escapes entirely (`chr(10)`, `chr(92)`) or use raw strings, then
+  read the generated line back off disk and scan for control characters before running it.
+
+**The tell.** If your test suite has never caught one of your own fixes being wrong, it is
+probably only testing that things do not crash.
+
+---
+
 ## Applying this to a fresh install
 
 1. Initialize the vault structure **before** any hook writes to it. An uninitialized vault does
@@ -171,6 +249,10 @@ thing to find out.
 5. Keep telemetry in its own tree, named so nobody mistakes it for knowledge.
 6. Keep memory out of git. `memory-vault/*` is gitignored here by design — concepts and guides
    are public, your project's memory is not.
+7. Route every capture through one helper. One place that decides what counts as a memory is one
+   place to fix when it is wrong — see Failure 2.
+8. For anything that must stay in sync, make divergence *fail*. Not warn, not back up — fail. See
+   Failure 4 for what three releases of "we wrote it down" bought.
 
 ## Reviewing an existing install
 
@@ -188,6 +270,15 @@ head -3 <vault>/observations.jsonl
 
 # 4. does the documented staging path match the code's path
 grep -rn 'staging' CLAUDE.md; grep -rn 'staging' hooks/
+
+# 5. has the shipped copy of your hooks drifted from the installed one
+diff <(tr -d '\r' < repo/hooks/x.py) <(tr -d '\r' < ~/.claude/hooks/x.py)
+
+# 6. read the last ten things your system decided to remember
+tail -40 <vault>/projects/*/staging.md
 ```
 
-Every one of those four turned up a real defect on a system its owner considered well built.
+Every one of those six turned up a real defect on a system its owner considered well built.
+
+Run #6 last and read it properly. It is the only one that tells you whether the memory being
+kept is worth keeping, and it is the check people skip — a store that is full looks healthy.

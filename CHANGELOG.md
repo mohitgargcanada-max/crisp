@@ -6,6 +6,30 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.7] — 2026-09-13
+
+### Changed
+
+- **Both theory documents brought up to date.** They were written at 0.1.2 and four releases of
+  hard-won lessons had landed since. `MEMORY_ARCHITECTURE.md` gains a sixth failure mode —
+  *your checks fail more often than your fixes* — documenting four broken verification commands
+  against zero surviving bugs in the fixes they were checking, plus the pre-commit near-miss that
+  would have blocked the repo forever over a line-ending difference and was caught by a
+  must-allow test rather than a must-block one. Failure 4 gains the drift story as its proof:
+  the rule was documented, understood, and still lost three consecutive releases, because nothing
+  ever failed. Failure 2 now says plainly that the capture bug was a *family* of five across
+  three subsystems, and that fixing each in place never stopped the class.
+
+- `AGENT_ENGINEERING_101.md` gains the enforce-don't-hope row in the harness table (with the
+  three-release drift as the worked example) and a new section in the from-the-inside chapter:
+  two things the model got wrong that readers should expect from any agent — stating system facts
+  from memory rather than checking, which propagated a false premise for three days; and writing
+  verification code that fails more often than the code under test.
+
+- The review checklist grows from four diagnostics to six: a hook-drift diff, and "read the last
+  ten things your system decided to remember" — the check people skip, because a store that is
+  full looks healthy.
+
 ## [0.1.6] — 2026-09-13
 
 ### Added

@@ -154,6 +154,17 @@ mechanized. Worked examples from this setup:
 | Don't repeat past mistakes | "remember our mistakes" | a stop hook that **blocks** the first stop and hands back relevant past mistakes |
 | Track session length | "keep sessions short" | a prompt hook incrementing a counter |
 | Load project memory | "check memory first" | a session-start hook that injects it |
+| Keep two copies of a file in sync | a note in the bug ledger | a pre-commit check that **fails the commit** when they diverge |
+
+**Why that last row is in the table.** It is not hypothetical. This repo ships hook files and
+installs them elsewhere; fixes kept landing on the installed copy and never on the tracked one.
+It was diagnosed, written up, and a backup was added. **The next two releases drifted again
+anyway** — by people who had just read the write-up. Nothing ever *failed*, so the rule competed
+with whatever they were actually doing, and lost. Three times.
+
+A pre-commit check that exits non-zero ended it in an afternoon. The lesson is not "write better
+notes". It is that **"we documented it" and "it cannot happen" are different controls**, and the
+distance between them was three releases.
 
 **The trap: two sources of truth.** A rules file said sessions should roll over at 8–10 turns.
 The hook that actually fires said 12. The hook wins every time, silently, and nobody noticed for
@@ -339,6 +350,31 @@ wrote at 100 words. It is weaker,** because it dilutes everything around it.
 That last one is the deepest lesson available here: **I cannot distinguish your good memory from
 your bad memory once it is written.** Curation is not my job to do at read time. It is yours at
 write time.
+
+### Two things I got wrong, which you should expect from any agent
+
+**I stated something as fact without checking, and it propagated for three days.** I wrote in a
+bug ledger that a file "lives outside this repo, so only this ledger entry is committed here."
+It had been tracked in that repo since its first commit. I never looked; I inferred it from where
+I had been editing. Three subsequent fixes read that note, believed it, and were applied to the
+wrong copy. The cost was not the wrong sentence — it was that a confident sentence in a durable
+file became everyone's premise.
+
+The defence is not that I try harder. It is that claims about *the state of your system* — what
+exists, where it lives, what is tracked — are cheap to verify and should be verified rather than
+recalled. When I tell you something factual about your repo, the useful question is "did you
+check, or are you remembering?"
+
+**My verification code failed more often than my fixes did.** In one session: a `grep -c ... ||
+echo 0` that produced a two-line value and reported clean files as corrupt; a `find` whose time
+filter bound to only one branch; a `mktemp -d` returning a path the interpreter could not open,
+which made a working hook look broken. Four broken checks, zero surviving bugs in the actual
+fixes.
+
+So when a check surprises you, **suspect the check first**. And test both directions — for
+anything that blocks, the cases that must be *allowed* are where the danger is. A pre-commit hook
+I wrote would have blocked every commit in the repo forever over a line-ending difference; it was
+caught by a must-allow test, never by a must-block one.
 
 ---
 
