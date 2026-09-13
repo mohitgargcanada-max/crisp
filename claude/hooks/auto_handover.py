@@ -345,7 +345,13 @@ _WRITE_TOOLS = {"edit", "write", "multiedit", "notebookedit"}
 # a false positive costs one extra review prompt, while a false negative silently
 # disables the gate on a turn that genuinely changed code.
 _BASH_WRITE = re.compile(
-    r"(?:^|[^0-9<])>>?\s*[^\s|&;<>]"                       # redirect into a file
+    r"(?:^|\s)>>?\s*[^\s|&;<>]"                            # redirect into a file
+    # Preceded by whitespace or start-of-string, NOT merely a non-digit. The looser
+    # form matched a Python f-string alignment spec -- print(f"{n:>3}") -- and fired
+    # the review gate on read-only inspection turns, which is the exact behaviour the
+    # gate was fixed to stop. Misses the space-less "cmd>file" form; that is rare, and
+    # a missed redirect still leaves cp/mv/tee/git and the Edit/Write tools covering
+    # anything that actually changes a tracked file.
     r"|\bsed\s+-i\b"
     r"|\b(?:cp|mv|rm|tee|truncate|mkdir|touch|chmod)\s"
     r"|\bgit\s+(?:commit|apply|checkout|reset|revert|merge|rebase|push|add)\b"

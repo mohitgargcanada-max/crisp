@@ -6,6 +6,40 @@ versioning is [semver](https://semver.org/).
 The single source of truth for the current version is the `VERSION` file at the repo root —
 both installers read it rather than hardcoding a copy, so a release touches one place.
 
+## [0.1.5] — 2026-09-13
+
+### Fixed
+
+- **The review gate's write-detector matched a Python f-string alignment spec.** `_BASH_WRITE`
+  used `(?:^|[^0-9<])>>?` — any non-digit before a `>` — so `print(f"{n:>3}")` read as a shell
+  redirect and the gate fired on read-only inspection turns. That is precisely the behaviour
+  0.1.4 fixed it to stop: a gate that interrupts with nothing to review teaches the reader to
+  dismiss it. Now requires whitespace or start-of-string before the redirect. It no longer
+  matches `{n:>3}`, `a -> b`, or `2>/dev/null`, and still matches `>`/`>>` redirects,
+  `cp`/`mv`/`tee`/`sed -i`, `git commit`, and `open(path, "w")`. 12/12 cases, both directions.
+
+  Trade-off recorded: the space-less `cmd>file` form is no longer detected. It is rare, and a
+  missed redirect still leaves the tool-name checks (Edit/Write/MultiEdit/NotebookEdit) and the
+  `cp`/`mv`/`git` patterns covering anything that actually changes a tracked file.
+
+### Removed
+
+- **Five stray `.crisp/` directories left over from the pre-`_repo_root` fragmentation bug.**
+  Four in one project's subdirectories (two empty, two holding only a `MOVED.md` breadcrumb) and
+  one inside this repo's own vault handovers folder, holding a single orphaned watermark file.
+
+  Verified as leftovers rather than a live regression: the vault one was written 2026-09-09 18:06
+  and `_repo_root()` landed 2026-09-10 14:31, so it predates the fix. `_repo_root()` is working;
+  nothing new has been misfiled since. The cleanup refused to touch any directory containing a
+  real `BUGS.md` or `MISTAKES.md`, and everything removed was backed up first.
+
+### Known gaps
+
+- Still nothing *fails* when `claude/hooks/*.py` and `~/.claude/hooks/*.py` diverge. This release
+  is the third consecutive one to carry a hook resync; the installer backup added in 0.1.3 limits
+  the damage but does not prevent the drift. A pre-commit hash comparison would close it, and is
+  the obvious next change.
+
 ## [0.1.4] — 2026-09-13
 
 Theme: every fix below is the same defect wearing a different hat — **a detector matched loosely
