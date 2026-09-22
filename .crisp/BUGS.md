@@ -129,3 +129,28 @@ second mechanism.
 prose rejected) and end-to-end: a read-only turn containing "I was wrong" writes nothing, a
 write turn containing "I broke ..." writes one entry. Polluted entry and the test artifact
 removed; ledger back to 4 real lessons. Status: FIXED.
+
+## 2026-09-22 — session_start_mem.py pointed at a retired handover store; two docs still described a superseded design
+
+**Symptom.** Every session's start banner said "No prior handover found" for aurora-gatway
+despite `.crisp/HANDOVER.md` (git-tracked inside that project's own repo) holding 65KB of real,
+actively-used handover history across 9 sessions.
+
+**Root cause.** Three generations of the handover mechanism existed at once, and only the oldest
+was ever wired to code: (1) `session_start_mem.py`'s `latest_handover()` read
+`~/.claude/handovers/<project-slug>/handover_*.md`, retired 2026-09-09 to just a `MOVED.md`
+pointer; (2) CRISP's `docs/MEMORY_ARCHITECTURE.md` still documented a per-project,
+per-session-file vault design as "the shape that works"; (3) a per-project vault doc,
+`engine/memory-vault/projects/aurora-gatway/HANDOVER_CONVENTION.md`, documented a later but
+still-superseded per-day-SHARED-file variant as binding. The actual live convention — one
+git-tracked file per project, `.crisp/HANDOVER.md`, session-ID-keyed sections, adopted
+2026-09-20 per aurora-gatway's own `CLAUDE.md` — was real and in active use, but no code read it
+and two docs never got updated to say it had won.
+
+**Fix.** Rewrote `session_start_mem.py` to walk up to the project's git root and read
+`.crisp/HANDOVER.md` directly, surfacing the topmost (newest) `## Session` heading. Corrected
+`docs/MEMORY_ARCHITECTURE.md`'s architecture diagram and added a Failure-3 addendum explaining
+the two-hop history. Marked `HANDOVER_CONVENTION.md` SUPERSEDED in place (kept for history, not
+deleted — it's gitignored vault content, not code). Verified live: hook now correctly reports
+`Session 9c4f674f` for aurora-gatway. Committed `0545628` (CRISP main, pushed to GitHub); vault
+doc + Aurora-gatway MEMORY.md pointer are local-only fixes. Status: FIXED.
