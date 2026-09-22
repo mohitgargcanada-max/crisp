@@ -221,6 +221,29 @@ the 5 most recent entries only when nothing matches (or nothing was touched
 yet). Known limit: matches on file basename only, not on function/concept
 names mentioned in the mistake text — cheap and honest, not semantic search.
 
+## Project Handover — one file per project, not one per session (binding, added 2026-09-20)
+
+A third ledger sits beside `.crisp/BUGS.md` and `.crisp/MISTAKES.md`:
+**`.crisp/HANDOVER.md`**, git-tracked inside the project's own repo. Every
+session working that project reads it FIRST and adds or updates its OWN
+`## Session <8-char-id> — <topic>` section (newest at the top) — the file
+itself is shared across every session, not minted fresh per session.
+
+**Why one file, not one per session.** Tried and abandoned first: a
+per-session file under `<vault>/projects/<project>/handovers/`, then a
+per-day `..._SHARED.md` variant of the same idea, both in the memory-vault.
+Both still let parallel sessions fragment the same day's state across
+multiple files with no single place saying who was doing what — see the
+Failure 3 addendum in `docs/MEMORY_ARCHITECTURE.md`. Moving it into the repo
+as one file fixed two things a vault path could not: `git log -- .crisp/HANDOVER.md`
+shows real authorship and timing, and a session working the codebase cannot
+plausibly miss a file that lives inside it.
+
+**Mechanics:** parallel sessions edit only their own section, never rewriting
+another's — same rule as the pending-master convention. `session_start_mem.py`
+surfaces the topmost (= latest) `## Session` block at session start; read its
+"Next steps" before doing anything else.
+
 ## Commit & PR Discipline (no new tracker — `gh` already is one)
 
 No separate PR-tracking system: `gh pr list`/`gh pr view` already shows every

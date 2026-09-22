@@ -18,23 +18,35 @@ memory-vault/
   concepts/              <- distilled knowledge, one idea per file
   decisions/             <- why we chose X over Y (never goes stale)
   projects/<project>/
-    handovers/           <- per-project, per-session handovers
-  session-handoffs/      <- chronological, hook-written
+  session-handoffs/      <- chronological, hook-written (TEA's own, cross-project)
   session-state/         <- <session-id>.json, keyed by session
 
   observations.jsonl     <- TELEMETRY. Not memory. Never mine for facts.
   metrics/               <- TELEMETRY. Not memory.
 ```
 
+```
+<project-repo>/
+  .crisp/HANDOVER.md     <- ONE file per project, git-tracked INSIDE the repo
+```
+
 Two axes, both required:
 
-- **Project-wise** — `projects/<project>/` so knowledge about one repo never bleeds into another.
-- **Session-wise** — handovers named `<date>_<session-id>` and state keyed by session id, so two
-  agents working the same repo on the same day cannot overwrite each other.
+- **Project-wise** — each project's handover lives in that project's own repo, so knowledge
+  about one repo never bleeds into another and travels with a clone/PR instead of staying
+  behind on one machine's vault.
+- **Session-wise, without per-session files** — `.crisp/HANDOVER.md` is ONE file, shared by
+  every session that works the project. Each session adds or updates its own `## Session
+  <8-char-id> — <topic>` block (newest at top) instead of minting a new dated file. This
+  supersedes an earlier two-hop design (`projects/<project>/handovers/<date>_<session-id>.md`
+  in the vault, later a per-day `..._SHARED.md`) that was tried first — see the addendum to
+  Failure 3 below for why per-session files lost.
 
-Bugs and mistakes deliberately live **outside** the vault, in each repo's own
-`.crisp/BUGS.md` and `.crisp/MISTAKES.md`. They are committed with the code, survive vault
-pruning, and stay true for the life of the project rather than the life of a session.
+Bugs, mistakes, and handovers deliberately live **outside** the vault, in each repo's own
+`.crisp/BUGS.md`, `.crisp/MISTAKES.md`, and `.crisp/HANDOVER.md`. They are committed with the
+code, survive vault pruning, stay true for the life of the project rather than the life of a
+session, and travel with the repo instead of being stranded on whichever machine's vault wrote
+them.
 
 ---
 
@@ -122,6 +134,20 @@ manufactures false confidence — the step appears to run and appears to find no
 
 **The tell.** `find` for your memory files. If they turn up in more than one tree, you have a
 consistency problem you cannot see from inside any single session.
+
+**Addendum — the same failure, one layer up (handovers, 2026-09-20).** The fix above pointed
+handovers at a single vault path, but a single *shared* path is not the same as a single *file*.
+Three parallel sessions working the same project the same day each wrote their own
+`handover_<date>_<session-id>.md` into that path — correct per the doc, and still three
+competing "here's the state" documents with no way to tell which was current. A same-day
+`..._SHARED.md` file was tried next: better, but it still lived in the vault, one hop away from
+the code the sessions were actually editing, so nothing guaranteed a session would open it
+before starting. The design that actually stuck moved the file a second time, into the project's
+own repo as `.crisp/HANDOVER.md` — one file, no date in the name, each session keyed by its own
+`## Session <id>` heading. Putting it inside the repo did two things a vault path could not:
+`git log -- .crisp/HANDOVER.md` shows who touched it when, and a session cannot plausibly miss it
+while reading the codebase it is about to edit. The lesson under the lesson: "one location" has
+to mean one *file*, not one *directory that different writers can still fragment*.
 
 ---
 

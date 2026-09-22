@@ -50,7 +50,12 @@ MEMORY_PATTERNS = {
 MISTAKE_PATTERNS = [
     r"I made a mistake", r"that was wrong", r"my bad\b",
     r"I was wrong", r"I broke\b",
-    r"my mistake", r"I misunderstood", r"I got that wrong",
+    # 2026-09-15: was bare r"my mistake", which also matches "my mistakeS" --
+    # so ordinary prose ABOUT the ledger ("my mistakes are committed") was
+    # filed as an admission, twice in one session, each time a session
+    # explained the previous false entry. Singular is the admission form
+    # ("that was my mistake"); plural is talking about the ledger.
+    r"my mistake(?!s)", r"I misunderstood", r"I got that wrong",
 ]
 
 ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
