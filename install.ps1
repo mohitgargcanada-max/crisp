@@ -50,10 +50,20 @@ Write-Host "  usage_report.py      -> ~/.claude/hooks/" -ForegroundColor Green
 
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 Write-Host "`nInstalling Claude Code skills..."
-$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','karpathy-guidelines')
+$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','karpathy-guidelines','dev-review-pipeline')
 foreach ($s in $skills) {
     Copy-Item "$CRISP\claude\skills\$s" "$SKILLS\$s" -Recurse -Force
     Write-Host "  $s -> ~/.claude/skills/$s" -ForegroundColor Green
+}
+
+# 3b. Copy Claude Code agents (subagents invoked via the Agent tool, not skills)
+Write-Host "`nInstalling Claude Code agents..."
+$AGENTS = "$CLAUDE\agents"
+New-Item -ItemType Directory -Force -Path $AGENTS | Out-Null
+$agents = @('code-reviewer','hallucination-reviewer')
+foreach ($a in $agents) {
+    Copy-Item "$CRISP\claude\agents\$a.md" "$AGENTS\$a.md" -Force
+    Write-Host "  $a -> ~/.claude/agents/$a.md" -ForegroundColor Green
 }
 
 # 4. Merge CLAUDE.md
@@ -178,7 +188,9 @@ $companionPlugins = @(
     @{ Key = "superpowers@"; Name = "superpowers"; Marketplace = "obra/superpowers-marketplace"; Install = "superpowers@claude-plugins-official"
        Note = "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute" },
     @{ Key = "code-review@"; Name = "code-review"; Marketplace = ""; Install = ""
-       Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" }
+       Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" },
+    @{ Key = "claude-security@"; Name = "claude-security"; Marketplace = "anthropics/claude-plugins-official"; Install = "claude-security@claude-plugins-official"
+       Note = "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed" }
 )
 
 foreach ($p in $companionPlugins) {

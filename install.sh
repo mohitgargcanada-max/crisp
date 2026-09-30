@@ -50,9 +50,19 @@ echo "  ✓ usage_report.py      -> ~/.claude/hooks/"
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 echo ""
 echo "Installing Claude Code skills..."
-for skill in token-kit headroom context-engineer agent-orchestration graphify karpathy-guidelines; do
+for skill in token-kit headroom context-engineer agent-orchestration graphify karpathy-guidelines dev-review-pipeline; do
   cp -r "$CRISP/claude/skills/$skill" "$SKILLS/"
   echo "  ✓ $skill -> ~/.claude/skills/$skill"
+done
+
+# 3b. Copy Claude Code agents (subagents invoked via the Agent tool, not skills)
+echo ""
+echo "Installing Claude Code agents..."
+AGENTS="$CLAUDE/agents"
+mkdir -p "$AGENTS"
+for agent in code-reviewer hallucination-reviewer; do
+  cp "$CRISP/claude/agents/$agent.md" "$AGENTS/$agent.md"
+  echo "  ✓ $agent -> ~/.claude/agents/$agent.md"
 done
 
 # 4. Merge CLAUDE.md
@@ -172,6 +182,8 @@ check_companion_plugin "superpowers@" "superpowers" "obra/superpowers-marketplac
   "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute"
 check_companion_plugin "code-review@" "code-review" "" "" \
   "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed"
+check_companion_plugin "claude-security@" "claude-security" "anthropics/claude-plugins-official" "claude-security@claude-plugins-official" \
+  "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed"
 
 echo ""
 echo "Done."
