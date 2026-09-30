@@ -162,20 +162,36 @@ INSTALLED_PLUGINS_TEXT=""
 [ -f "$INSTALLED_PLUGINS" ] && INSTALLED_PLUGINS_TEXT="$(cat "$INSTALLED_PLUGINS")"
 
 check_companion_plugin() {
-  local key="$1" name="$2" marketplace="$3" install="$4" note="$5"
+  local key="$1" name="$2" marketplace="$3" install="$4" note="$5" autoinstall="${6:-false}"
   if echo "$INSTALLED_PLUGINS_TEXT" | grep -qF "\"${key}"; then
     echo "  ✓ $name found"
-  else
-    echo "  $name not found — $note"
-    if [ -n "$marketplace" ]; then
-      echo "    /plugin marketplace add $marketplace"
-      echo "    /plugin install $install"
+    return
+  fi
+  if [ "$autoinstall" = "true" ] && [ -n "$marketplace" ]; then
+    echo "  $name not found — installing automatically ($note)"
+    if claude plugin marketplace add "$marketplace" >/dev/null 2>&1 && claude plugin install "$install" -s user >/dev/null 2>&1; then
+      echo "    ✓ installed"
     else
-      echo "    check the /plugin menu in Claude Code"
+      echo "    ! auto-install failed -- run manually:"
+      echo "    claude plugin marketplace add $marketplace"
+      echo "    claude plugin install $install -s user"
     fi
+    return
+  fi
+  echo "  $name not found — $note"
+  if [ -n "$marketplace" ]; then
+    echo "    /plugin marketplace add $marketplace"
+    echo "    /plugin install $install"
+  else
+    echo "    check the /plugin menu in Claude Code"
   fi
 }
 
+# AutoInstall (last arg "true") actually runs the real `claude plugin` CLI instead of just
+# printing instructions -- deliberately only for claude-security, which is required
+# infrastructure for dev-review-pipeline's security pass, not an optional/alternative tool
+# like claude-mem/superpowers the way the others are. Claude-Code-only -- no Codex/Hermes
+# equivalent, not attempted there.
 check_companion_plugin "claude-mem@" "claude-mem" "thedotmack/claude-mem" "claude-mem@thedotmack" \
   "persistent semantic memory across sessions"
 check_companion_plugin "superpowers@" "superpowers" "obra/superpowers-marketplace" "superpowers@claude-plugins-official" \
@@ -183,7 +199,8 @@ check_companion_plugin "superpowers@" "superpowers" "obra/superpowers-marketplac
 check_companion_plugin "code-review@" "code-review" "" "" \
   "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed"
 check_companion_plugin "claude-security@" "claude-security" "anthropics/claude-plugins-official" "claude-security@claude-plugins-official" \
-  "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed"
+  "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed" \
+  "true"
 
 echo ""
 echo "Done."

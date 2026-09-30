@@ -183,28 +183,54 @@ $installedPlugins = "$CLAUDE\plugins\installed_plugins.json"
 $installedPluginsText = if (Test-Path $installedPlugins) { Get-Content $installedPlugins -Raw } else { "" }
 
 $companionPlugins = @(
-    @{ Key = "claude-mem@"; Name = "claude-mem"; Marketplace = "thedotmack/claude-mem"; Install = "claude-mem@thedotmack"
+    @{ Key = "claude-mem@"; Name = "claude-mem"; Marketplace = "thedotmack/claude-mem"; Install = "claude-mem@thedotmack"; AutoInstall = $false
        Note = "persistent semantic memory across sessions" },
-    @{ Key = "superpowers@"; Name = "superpowers"; Marketplace = "obra/superpowers-marketplace"; Install = "superpowers@claude-plugins-official"
+    @{ Key = "superpowers@"; Name = "superpowers"; Marketplace = "obra/superpowers-marketplace"; Install = "superpowers@claude-plugins-official"; AutoInstall = $false
        Note = "the full brainstorm/plan/TDD/debug/review methodology (14 skills) — CRISP's own agent-orchestration skill is a much smaller independent cheatsheet, not a substitute" },
-    @{ Key = "code-review@"; Name = "code-review"; Marketplace = ""; Install = ""
+    @{ Key = "code-review@"; Name = "code-review"; Marketplace = ""; Install = ""; AutoInstall = $false
        Note = "Anthropic's own 4-agent PR review plugin, ships with Claude Code — check the /plugin menu if not already available, no separate marketplace needed" },
-    @{ Key = "claude-security@"; Name = "claude-security"; Marketplace = "anthropics/claude-plugins-official"; Install = "claude-security@claude-plugins-official"
-       Note = "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed" }
+    @{ Key = "claude-security@"; Name = "claude-security"; Marketplace = "anthropics/claude-plugins-official"; Install = "claude-security@claude-plugins-official"; AutoInstall = $true
+       Note = "official Anthropic security scanner: inventory -> research -> multi-agent verifier panel, produces patch files you apply yourself, never auto-commits. CRISP's own dev-review-pipeline skill calls it for the security pass when installed. Claude-Code-only -- no Codex/Hermes equivalent, not attempted there." }
 )
 
+# AutoInstall plugins get actually installed via the real `claude plugin` CLI (verified it
+# supports non-interactive marketplace add + install), not just printed as instructions --
+# deliberately NOT extended to claude-mem/superpowers/code-review, which are genuinely
+# optional/alternative tools the user should consciously opt into, not auto-installed by a
+# script. claude-security is required infrastructure for dev-review-pipeline's security pass,
+# not an alternative -- that's the actual distinction, not "all plugins should auto-install".
 foreach ($p in $companionPlugins) {
     $found = $installedPluginsText -match [regex]::Escape('"' + $p.Key)
     if ($found) {
         Write-Host "  $($p.Name) found" -ForegroundColor Green
-    } else {
-        Write-Host "  $($p.Name) not found — $($p.Note)" -ForegroundColor Yellow
-        if ($p.Marketplace) {
-            Write-Host "    /plugin marketplace add $($p.Marketplace)" -ForegroundColor White
-            Write-Host "    /plugin install $($p.Install)" -ForegroundColor White
-        } else {
-            Write-Host "    check the /plugin menu in Claude Code" -ForegroundColor White
+        continue
+    }
+    if ($p.AutoInstall -and $p.Marketplace) {
+        Write-Host "  $($p.Name) not found — installing automatically ($($p.Note))" -ForegroundColor Yellow
+        $installOk = $true
+        try {
+            claude plugin marketplace add $p.Marketplace 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { $installOk = $false }
+            claude plugin install $p.Install -s user 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { $installOk = $false }
+        } catch {
+            $installOk = $false
         }
+        if ($installOk) {
+            Write-Host "    installed" -ForegroundColor Green
+        } else {
+            Write-Host "    auto-install failed -- run manually:" -ForegroundColor Red
+            Write-Host "    claude plugin marketplace add $($p.Marketplace)" -ForegroundColor White
+            Write-Host "    claude plugin install $($p.Install) -s user" -ForegroundColor White
+        }
+        continue
+    }
+    Write-Host "  $($p.Name) not found — $($p.Note)" -ForegroundColor Yellow
+    if ($p.Marketplace) {
+        Write-Host "    /plugin marketplace add $($p.Marketplace)" -ForegroundColor White
+        Write-Host "    /plugin install $($p.Install)" -ForegroundColor White
+    } else {
+        Write-Host "    check the /plugin menu in Claude Code" -ForegroundColor White
     }
 }
 
