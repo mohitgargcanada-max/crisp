@@ -25,6 +25,31 @@ const PROFILE_EVENTS = {
   strict: null,
 };
 
+// Walk up from cwd to the git repo root. A session started in any
+// subdirectory (or a subagent's own scratch dir) must still resolve to the
+// real project, not that subdirectory's own name -- this is the single
+// shared implementation; callers that used to inline path.basename(cwd) or
+// duplicate this walk should import it from here instead.
+// Mirrors auto_handover.py's _repo_root() (Python side, fixed 2026-09-10 for
+// the same root cause). Falls back to cwd when no .git is found above it.
+function repoRoot(cwd) {
+  let here;
+  try { here = path.resolve(cwd); } catch { return cwd; }
+  let dir = here;
+  while (true) {
+    try {
+      if (fs.existsSync(path.join(dir, ".git"))) return dir;
+    } catch { /* ignore and keep walking */ }
+    const parent = path.dirname(dir);
+    if (parent === dir) return here;
+    dir = parent;
+  }
+}
+
+function repoRootName(cwd) {
+  return path.basename(repoRoot(cwd));
+}
+
 function safeSlug(value, fallback = "item") {
   const slug = String(value || "")
     .toLowerCase()
@@ -52,6 +77,11 @@ function readJsonl(file) {
 function appendJsonl(file, row) {
   ensureDir(path.dirname(file));
   fs.appendFileSync(file, JSON.stringify(row) + "\n", "utf8");
+}
+
+function writeJsonl(file, rows) {
+  ensureDir(path.dirname(file));
+  fs.writeFileSync(file, rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length ? "\n" : ""), "utf8");
 }
 
 function shouldRunHook(event, host = "") {
@@ -396,16 +426,60 @@ function learnInstinctFromPrompt({ memoryDir, payload = {}, project = "" }) {
   }
   if (!action) return null;
 
-  const scoped = /\b(for this project|in this repo|this repo|this project)\b/i.test(text);
+  // Default scope is now PROJECT, not global -- a bare "always X" said inside
+  // one project used to leak into every other project's sessions (confirmed:
+  // an Aurora-only scan instinct was injecting into unrelated CRISP-toolkit
+  // sessions). Global now requires an explicit everywhere/all-projects signal.
+  const explicitProject = /\b(for this project|in this repo|this repo|this project)\b/i.test(text);
+  const explicitGlobal = /\b(everywhere|every project|all projects|globally|every repo|across (?:all )?projects|in every repo)\b/i.test(text);
+  const scope = explicitGlobal && !explicitProject ? "global" : "project";
+
+  // New instincts start as a silent, unreviewed CANDIDATE (confidence well
+  // below the 0.7 injection floor in activeInstinctContext), not live
+  // immediately. Nothing auto-promotes; `tea instincts promote <id>` does.
   return saveInstinct(memoryDir, {
-    scope: scoped ? "project" : "global",
+    scope,
     project,
-    trigger: "user-stated preference",
+    trigger: "user-stated preference (unreviewed candidate)",
     action: action.slice(0, 300),
     domain: "preference",
-    confidence: scoped ? 0.8 : 0.75,
-    evidence: "captured from explicit user wording",
+    confidence: 0.45,
+    evidence: "captured from explicit user wording; run `tea instincts promote <id>` to activate",
   });
+}
+
+function findInstinctFile(memoryDir, id) {
+  const globalFile = instinctsPath(memoryDir, "", "global");
+  if (readJsonl(globalFile).some((row) => row.id === id)) return globalFile;
+  const projectsDir = path.join(memoryDir, "projects");
+  if (!fs.existsSync(projectsDir)) return null;
+  for (const name of fs.readdirSync(projectsDir)) {
+    const file = path.join(projectsDir, name, "instincts.jsonl");
+    if (readJsonl(file).some((row) => row.id === id)) return file;
+  }
+  return null;
+}
+
+function promoteInstinct(memoryDir, id, confidence) {
+  const file = findInstinctFile(memoryDir, id);
+  if (!file) return null;
+  const rows = readJsonl(file);
+  const row = rows.find((r) => r.id === id);
+  if (!row) return null;
+  row.confidence = Math.max(0.1, Math.min(1, Number(confidence || 0.85)));
+  row.evidence = [row.evidence, "promoted by user"].filter(Boolean).join(" | ");
+  writeJsonl(file, rows);
+  return row;
+}
+
+function dropInstinct(memoryDir, id) {
+  const file = findInstinctFile(memoryDir, id);
+  if (!file) return null;
+  const rows = readJsonl(file);
+  const remaining = rows.filter((row) => row.id !== id);
+  if (remaining.length === rows.length) return null;
+  writeJsonl(file, remaining);
+  return true;
 }
 
 module.exports = {
@@ -415,11 +489,16 @@ module.exports = {
   contextSuggestion,
   contextWindowForTranscript,
   contextWindowTokens,
+  dropInstinct,
+  findInstinctFile,
   learnInstinctFromPrompt,
+  promoteInstinct,
   readCostSnapshots,
   readInstincts,
   recallInstincts,
   recordCostSnapshot,
+  repoRoot,
+  repoRootName,
   saveInstinct,
   shouldRunHook,
   summarizeCost,

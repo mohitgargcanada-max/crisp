@@ -12,7 +12,10 @@ const {
   sessionStatus,
 } = require("../lib/session-rollover");
 const {
+  dropInstinct,
+  promoteInstinct,
   recallInstincts,
+  repoRootName,
   saveInstinct,
   summarizeCost,
 } = require("../lib/hook-runtime");
@@ -86,6 +89,8 @@ Usage:
   node tea.js instincts add <action> [path] [--project <name>] [--global] [--trigger <text>] [--confidence 0.7] [--domain <name>] [--json]
   node tea.js instincts list [path] [--project <name>] [--json]
   node tea.js instincts recall <query> [path] [--project <name>] [--json]
+  node tea.js instincts promote <id> [path] [--confidence 0.85] [--json]
+  node tea.js instincts drop <id> [path] [--json]
   node tea.js cache-prompt build <stable-file> <dynamic-file> [--out <file>] [--key <name>] [--json]
   node tea.js cache-prompt split <prompt-file> [--out-dir <dir>] [--json]
   node tea.js bridge start [--port 6768]
@@ -116,6 +121,8 @@ Examples:
   node tea.js cost report
   node tea.js instincts add "Prefer narrow rg search before large file reads" --project token-kit
   node tea.js instincts recall "large file reads" --project token-kit
+  node tea.js instincts promote ins_20260930_123_abcde --confidence 0.85
+  node tea.js instincts drop ins_20260930_123_abcde
   node tea.js cache-prompt build stable.md task.md --out prompt.cache.md --key my-project
   node tea.js cache-prompt split prompt.md --out-dir prompt-cache
   node tea.js bridge start
@@ -419,7 +426,7 @@ function runObservedTask(args) {
     `tokens_saved_est=${compact.bodyStats.savedTokens}`,
   ].join(" "), DEFAULT_MEMORY_DIR, {
     type: exitCode === 0 ? "task" : "error",
-    project: path.basename(process.cwd()),
+    project: repoRootName(process.cwd()),
     silent: true,
   });
   console.log("");
@@ -829,7 +836,7 @@ function addInstinctCommand(dirArg, args, json) {
   const result = saveInstinct(vaultDir, {
     action,
     scope: hasFlag(args, "--global") ? "global" : "project",
-    project: argValue(args, "--project", path.basename(process.cwd())),
+    project: argValue(args, "--project", repoRootName(process.cwd())),
     trigger: argValue(args, "--trigger", "when relevant"),
     confidence: argValue(args, "--confidence", "0.7"),
     domain: argValue(args, "--domain", "workflow"),
@@ -845,7 +852,7 @@ function addInstinctCommand(dirArg, args, json) {
 
 function listInstinctsCommand(dirArg, args, json) {
   const vaultDir = resolveMemoryDir(dirArg);
-  const project = argValue(args, "--project", path.basename(process.cwd()));
+  const project = argValue(args, "--project", repoRootName(process.cwd()));
   const rows = recallInstincts(vaultDir, project, "", 100);
   if (json) {
     console.log(JSON.stringify({ vaultDir, project, count: rows.length, instincts: rows }, null, 2));
@@ -864,7 +871,7 @@ function recallInstinctsCommand(query, dirArg, args, json) {
   const terms = String(query || "").trim();
   if (!terms) throw new Error("Missing instinct recall query");
   const vaultDir = resolveMemoryDir(dirArg);
-  const project = argValue(args, "--project", path.basename(process.cwd()));
+  const project = argValue(args, "--project", repoRootName(process.cwd()));
   const rows = recallInstincts(vaultDir, project, terms, 10);
   if (json) {
     console.log(JSON.stringify({ vaultDir, project, query: terms, count: rows.length, instincts: rows }, null, 2));
@@ -877,6 +884,32 @@ function recallInstinctsCommand(query, dirArg, args, json) {
   for (const row of rows) printInstinct(row);
 }
 
+function promoteInstinctCommand(id, dirArg, args, json) {
+  if (!id) throw new Error("Missing instinct id");
+  const vaultDir = resolveMemoryDir(dirArg);
+  const confidence = argValue(args, "--confidence", "0.85");
+  const row = promoteInstinct(vaultDir, id, confidence);
+  if (!row) throw new Error(`No instinct found with id ${id}`);
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, promoted: row }, null, 2));
+    return;
+  }
+  console.log(`instinct_promoted: ${row.id} -> confidence ${row.confidence}`);
+  printInstinct(row);
+}
+
+function dropInstinctCommand(id, dirArg, json) {
+  if (!id) throw new Error("Missing instinct id");
+  const vaultDir = resolveMemoryDir(dirArg);
+  const dropped = dropInstinct(vaultDir, id);
+  if (!dropped) throw new Error(`No instinct found with id ${id}`);
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, dropped: id }, null, 2));
+    return;
+  }
+  console.log(`instinct_dropped: ${id}`);
+}
+
 function buildCachePromptCommand(args, json) {
   const stableFile = args[2];
   const dynamicFile = args[3];
@@ -886,7 +919,7 @@ function buildCachePromptCommand(args, json) {
   const result = buildCachePrompt({
     stableText: fs.readFileSync(stablePath, "utf8"),
     dynamicText: fs.readFileSync(dynamicPath, "utf8"),
-    key: argValue(args, "--key", path.basename(process.cwd())),
+    key: argValue(args, "--key", repoRootName(process.cwd())),
   });
   const out = argValue(args, "--out", "");
   const payload = {
@@ -984,7 +1017,7 @@ function scheduleWakeCommand(dirArg, args, json) {
   const result = scheduleWakePlan({
     memoryDir: vaultDir,
     runAt,
-    project: argValue(args, "--project", path.basename(process.cwd())),
+    project: argValue(args, "--project", repoRootName(process.cwd())),
     cwd: argValue(args, "--cwd", process.cwd()),
     host: "manual",
     event: "wake schedule",
@@ -1812,7 +1845,17 @@ function main() {
       recallInstinctsCommand(args[2], dir, args, json);
       return;
     }
-    throw new Error("Usage: node tea.js instincts add|list|recall");
+    if (subcommand === "promote") {
+      const dir = positionalArgs(args.slice(3), ["--confidence"])[0];
+      promoteInstinctCommand(args[2], dir, args, json);
+      return;
+    }
+    if (subcommand === "drop") {
+      const dir = positionalArgs(args.slice(3), [])[0];
+      dropInstinctCommand(args[2], dir, json);
+      return;
+    }
+    throw new Error("Usage: node tea.js instincts add|list|recall|promote|drop");
   }
 
   if (command === "cache-prompt") {

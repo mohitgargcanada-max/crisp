@@ -16,6 +16,7 @@ const {
   contextSuggestion,
   learnInstinctFromPrompt,
   recordCostSnapshot,
+  repoRoot,
   shouldRunHook,
 } = require("../../lib/hook-runtime");
 const {
@@ -33,24 +34,6 @@ const ROLLOVER_TOKEN_THRESHOLD = Math.max(0, Number(process.env.TEA_ROLLOVER_TOK
 function argValue(flag, fallback) {
   const index = process.argv.indexOf(flag);
   return index === -1 || index + 1 >= process.argv.length ? fallback : process.argv[index + 1];
-}
-
-// Walk up from cwd to the git repo root. Mirrors auto_handover.py's
-// _repo_root() (Python side) -- a session started in any subdirectory must
-// still be labeled with the real project, not the subdirectory's own name.
-// Falls back to the original cwd when no .git is found anywhere above.
-function repoRoot(cwd) {
-  let here;
-  try { here = path.resolve(cwd); } catch { return cwd; }
-  let dir = here;
-  while (true) {
-    try {
-      if (fs.existsSync(path.join(dir, ".git"))) return dir;
-    } catch { /* ignore and keep walking */ }
-    const parent = path.dirname(dir);
-    if (parent === dir) return here;
-    dir = parent;
-  }
 }
 
 function estimateTokens(text) {
