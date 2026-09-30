@@ -348,6 +348,20 @@ function push(vaultDir, { project, dryRun } = {}) {
     allResults.push({ project: p, results });
   }
   if (dryRun) return allResults;
+
+  // Dashboard snapshot + regenerate: lazy require avoids a circular import
+  // (machine-state.js itself requires hostId from this file).
+  try {
+    const { writeSnapshot, readAllSnapshots } = require("./machine-state");
+    const { generateDashboardHtml } = require("./dashboard-html");
+    writeSnapshot(vaultDir);
+    const html = generateDashboardHtml(readAllSnapshots(vaultDir));
+    fs.writeFileSync(path.join(vaultDir, "dashboard.html"), html, "utf8");
+  } catch (e) {
+    // Never let a dashboard-generation problem block the actual memory sync.
+    process.stderr.write(`(dashboard snapshot/generation skipped: ${e.message})\n`);
+  }
+
   run("git", ["add", "-A"], vaultDir);
   const diff = run("git", ["diff", "--cached", "--quiet"], vaultDir, { allowFail: true });
   if (diff.status !== 0) {

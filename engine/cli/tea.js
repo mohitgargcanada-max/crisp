@@ -27,6 +27,13 @@ const {
   consolidate: vaultConsolidate,
 } = require("../lib/vault-consolidate");
 const {
+  writeSnapshot: writeMachineSnapshot,
+  readAllSnapshots,
+} = require("../lib/machine-state");
+const {
+  generateDashboardHtml,
+} = require("../lib/dashboard-html");
+const {
   buildCachePrompt,
   writeCacheSplit,
 } = require("../lib/prompt-cache");
@@ -77,6 +84,7 @@ Usage:
   node tea.js vault push [path] [--project <name>] [--dry-run] [--json]
   node tea.js vault pull [path] [--project <name>] [--dry-run] [--json]
   node tea.js vault consolidate [path] [--confirm] [--json]
+  node tea.js vault dashboard [path] [--json]
   node tea.js vault status [path]
   node tea.js memory-map show [path]
   node tea.js memory-map recall <query> [path] [--json]
@@ -1178,6 +1186,22 @@ function vaultConsolidateCommand(dirArg, args, json) {
   if (!confirm) console.log("  (dry run -- pass --confirm to apply)");
 }
 
+function vaultDashboardCommand(dirArg, json) {
+  const vaultDir = resolveMemoryDir(dirArg);
+  writeMachineSnapshot(vaultDir);
+  const snapshots = readAllSnapshots(vaultDir);
+  const html = generateDashboardHtml(snapshots);
+  const outPath = path.join(vaultDir, "dashboard.html");
+  fs.writeFileSync(outPath, html, "utf8");
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, outPath, machines: snapshots.length }, null, 2));
+    return;
+  }
+  console.log(`vault_dashboard: ${outPath}`);
+  console.log(`  ${snapshots.length} machine(s): ${snapshots.map((s) => s.host).join(", ")}`);
+  console.log(`  (this only writes the file -- run 'tea vault push' to commit and share it)`);
+}
+
 function vaultGithubInit(dirArg, repoName) {
   const vaultDir = resolveMemoryDir(dirArg);
   const name = repoName || "token-efficient-agent-memory-vault";
@@ -1767,6 +1791,10 @@ function main() {
     }
     if (subcommand === "consolidate") {
       vaultConsolidateCommand(positionalArgs(args.slice(2))[0], args, hasFlag(args, "--json"));
+      return;
+    }
+    if (subcommand === "dashboard") {
+      vaultDashboardCommand(positionalArgs(args.slice(2))[0], hasFlag(args, "--json"));
       return;
     }
     if (subcommand === "github-init") {
