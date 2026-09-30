@@ -75,6 +75,40 @@ def latest_session_heading(handover_path):
     return None
 
 
+VAULT_DIR = Path(r"C:\Users\mohit\tools\crisp\engine\memory-vault")
+
+
+def _consolidation_nag_line():
+    """Weekly nag, notify-only -- never runs consolidation itself (this project's own rule:
+    diagnostics/fixes stay separate, nothing consequential happens without approval). Reads
+    LOCAL files only, no network -- so it's only as fresh as this machine's last `git pull`,
+    which the line says explicitly rather than implying it checked the remote."""
+    log_path = VAULT_DIR / "state" / "consolidation-log.jsonl"
+    try:
+        threshold_days = int(os.environ.get("CRISP_CONSOLIDATE_NAG_DAYS", "7"))
+        if not log_path.exists():
+            return None
+        lines = [l for l in log_path.read_text(encoding="utf-8", errors="ignore").splitlines() if l.strip()]
+        if not lines:
+            return None
+        last = json.loads(lines[-1])
+        last_ts = datetime.fromisoformat(last["ts"].replace("Z", "+00:00"))
+        days = (datetime.now(last_ts.tzinfo) - last_ts).days
+        if days < threshold_days:
+            return None
+        git_dir = VAULT_DIR / ".git"
+        pull_note = ""
+        if git_dir.exists():
+            fetch_head = git_dir / "FETCH_HEAD"
+            if fetch_head.exists():
+                pull_age_days = (datetime.now() - datetime.fromtimestamp(fetch_head.stat().st_mtime)).days
+                pull_note = f" (as of your last pull, {pull_age_days}d ago)"
+        return (f"- Vault consolidation: last run {days}d ago{pull_note} — "
+                f"tell Mohit once; do not run `tea vault consolidate` yourself.")
+    except Exception:
+        return None
+
+
 def main():
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -83,6 +117,9 @@ def main():
 
     cwd = event.get("cwd", os.getcwd())
     project_name = _repo_root(cwd).name
+    # Missing/unknown source defaults to "startup" (the common case) rather than silently
+    # suppressing the nag on an unexpected payload shape.
+    is_startup = event.get("source", "startup") == "startup"
 
     handover_path = project_handover_path(cwd)
     if handover_path.exists():
@@ -94,10 +131,12 @@ def main():
     else:
         handover_line = f"- No handover file yet at {handover_path}"
 
+    nag_line = _consolidation_nag_line() if is_startup else None
+
     # This text is injected into Claude's context at session start
     print(f"""[SESSION START — AUTO MEMORY RECALL]
 Project: {project_name} | CWD: {cwd}
-{handover_line}
+{handover_line}{chr(10) + nag_line if nag_line else ""}
 
 INSTRUCTIONS (execute silently before first response):
 1. Search claude-mem for "{project_name}" context using memory_context or smart_search MCP tool

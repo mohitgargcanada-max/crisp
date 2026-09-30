@@ -171,8 +171,13 @@ function listMdFiles(dir) {
 }
 
 // Reconciles ONE file between native (local) and vault (remote) copies for a project,
-// using the 3-way base comparison. Mutates disk directly; returns what it did, for logging.
-function reconcileFile(name, localDir, remoteDir, base) {
+// using the 3-way base comparison. Mutates disk directly UNLESS dryRun is set, in which case
+// it only computes and returns what it WOULD do -- fixed 2026-09-30 after a real incident:
+// the first version ran the actual fs.copyFileSync calls regardless of dryRun (only the git
+// commit/push step was gated), so a "--dry-run" preview silently performed a real 344-file
+// sync. No data was lost (the files landed in the right place and got committed+pushed on
+// the very next real run), but "dry run" must actually mean nothing gets written.
+function reconcileFile(name, localDir, remoteDir, base, { dryRun = false } = {}) {
   const localPath = path.join(localDir, name);
   const remotePath = path.join(remoteDir, name);
   const localHash = hashFile(localPath);
@@ -204,16 +209,20 @@ function reconcileFile(name, localDir, remoteDir, base) {
   }
 
   if (localChanged && !remoteChanged) {
-    fs.mkdirSync(remoteDir, { recursive: true });
     if (localHash === null) return { action: "noop", hash: baseHash }; // both sides now absent
-    fs.copyFileSync(localPath, remotePath);
+    if (!dryRun) {
+      fs.mkdirSync(remoteDir, { recursive: true });
+      fs.copyFileSync(localPath, remotePath);
+    }
     return { action: "copied-local-to-remote", hash: localHash };
   }
 
   if (remoteChanged && !localChanged) {
-    fs.mkdirSync(localDir, { recursive: true });
     if (remoteHash === null) return { action: "noop", hash: baseHash };
-    fs.copyFileSync(remotePath, localPath);
+    if (!dryRun) {
+      fs.mkdirSync(localDir, { recursive: true });
+      fs.copyFileSync(remotePath, localPath);
+    }
     return { action: "copied-remote-to-local", hash: remoteHash };
   }
 
@@ -221,17 +230,19 @@ function reconcileFile(name, localDir, remoteDir, base) {
     // Both sides changed (including both-created-new, baseHash undefined) to DIFFERENT
     // content. Never overwrite either -- write a sibling on both sides so nothing is lost,
     // flagged for a human (or `tea vault consolidate`) to actually resolve.
-    const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
-    const stem = name.replace(/\.md$/, "");
-    if (localHash !== null) {
-      const siblingOnRemote = path.join(remoteDir, `${stem}.conflict-${hostId()}-${ts}.md`);
-      fs.mkdirSync(remoteDir, { recursive: true });
-      fs.copyFileSync(localPath, siblingOnRemote);
-    }
-    if (remoteHash !== null) {
-      const siblingOnLocal = path.join(localDir, `${stem}.conflict-vault-${ts}.md`);
-      fs.mkdirSync(localDir, { recursive: true });
-      fs.copyFileSync(remotePath, siblingOnLocal);
+    if (!dryRun) {
+      const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
+      const stem = name.replace(/\.md$/, "");
+      if (localHash !== null) {
+        const siblingOnRemote = path.join(remoteDir, `${stem}.conflict-${hostId()}-${ts}.md`);
+        fs.mkdirSync(remoteDir, { recursive: true });
+        fs.copyFileSync(localPath, siblingOnRemote);
+      }
+      if (remoteHash !== null) {
+        const siblingOnLocal = path.join(localDir, `${stem}.conflict-vault-${ts}.md`);
+        fs.mkdirSync(localDir, { recursive: true });
+        fs.copyFileSync(remotePath, siblingOnLocal);
+      }
     }
     return { action: "conflict-sibling-written", hash: null };
   }
@@ -242,12 +253,14 @@ function reconcileFile(name, localDir, remoteDir, base) {
 // MEMORY.md: never merged. Each machine's copy is archived under
 // projects/<slug>/native/_hosts/<host>/MEMORY.md; never copied back over another machine's
 // own MEMORY.md. See module header for why (Claude Code's 200-line/25KB load limit).
-function archiveMemoryMd(localDir, remoteDir) {
+function archiveMemoryMd(localDir, remoteDir, { dryRun = false } = {}) {
   const localMemory = path.join(localDir, "MEMORY.md");
   if (!fs.existsSync(localMemory)) return null;
   const hostDir = path.join(remoteDir, "_hosts", hostId());
-  fs.mkdirSync(hostDir, { recursive: true });
-  fs.copyFileSync(localMemory, path.join(hostDir, "MEMORY.md"));
+  if (!dryRun) {
+    fs.mkdirSync(hostDir, { recursive: true });
+    fs.copyFileSync(localMemory, path.join(hostDir, "MEMORY.md"));
+  }
   return hostDir;
 }
 
@@ -278,26 +291,42 @@ function writeSyncedIndex(localDir, remoteDir) {
   fs.writeFileSync(path.join(localDir, "_synced-from-other-machines.md"), lines.join("\n"), "utf8");
 }
 
-function syncOneProject(vaultDir, project, nativeDir, direction) {
+function syncOneProject(vaultDir, project, nativeDir, direction, { dryRun = false } = {}) {
   const remoteDir = path.join(vaultDir, "projects", project, "native");
-  fs.mkdirSync(remoteDir, { recursive: true });
+  if (!dryRun) fs.mkdirSync(remoteDir, { recursive: true });
   const base = loadBaseRecord(vaultDir, project);
   const nextBase = { ...base };
   const results = [];
 
-  archiveMemoryMd(nativeDir, remoteDir);
+  archiveMemoryMd(nativeDir, remoteDir, { dryRun });
 
   const names = new Set([...listMdFiles(nativeDir), ...listMdFiles(remoteDir)]);
   for (const name of names) {
-    const r = reconcileFile(name, nativeDir, remoteDir, base);
+    const r = reconcileFile(name, nativeDir, remoteDir, base, { dryRun });
     if (r.hash !== null && r.hash !== undefined) nextBase[name] = r.hash;
     else delete nextBase[name];
     if (r.action !== "noop") results.push({ file: name, ...r });
   }
 
+  // Dry-run must never persist the base record -- doing so would make a LATER real run
+  // believe these files are already synced (same class of bug as the file-copy fix above:
+  // "preview" silently becoming "real" because a side effect wasn't actually gated).
+  if (dryRun) return results;
+
   if (direction === "pull") writeSyncedIndex(nativeDir, remoteDir);
   saveBaseRecord(vaultDir, project, nextBase);
   return results;
+}
+
+// Pushes whenever there's anything unpushed, regardless of which step committed it. Fixed
+// 2026-09-30 after a real incident: gating the push on "did the LAST diff check find
+// something new" meant the pre-sync checkpoint commit could absorb the real changes, leave
+// nothing for that final diff check to find, and strand a real commit unpushed with no
+// error -- comparing against the remote tracking ref instead catches commits from ANY step.
+function pushIfAhead(vaultDir) {
+  if (!hasRemote(vaultDir)) return;
+  const ahead = run("git", ["rev-list", "--count", "@{u}..HEAD"], vaultDir, { allowFail: true });
+  if (ahead.status === 0 && parseInt(ahead.stdout.trim(), 10) > 0) safePush(vaultDir);
 }
 
 function push(vaultDir, { project, dryRun } = {}) {
@@ -307,12 +336,15 @@ function push(vaultDir, { project, dryRun } = {}) {
     // never has to run against a dirty tree.
     run("git", ["add", "-A"], vaultDir);
     const dirty = run("git", ["diff", "--cached", "--quiet"], vaultDir, { allowFail: true });
-    if (dirty.status !== 0) run("git", ["commit", "-m", "vault: pre-sync checkpoint"], vaultDir);
+    if (dirty.status !== 0) {
+      assertNoSecrets(vaultDir);
+      run("git", ["commit", "-m", "vault: pre-sync checkpoint"], vaultDir);
+    }
     safePull(vaultDir);
   }
   const allResults = [];
   for (const { project: p, nativeDir } of projects) {
-    const results = syncOneProject(vaultDir, p, nativeDir, "push");
+    const results = syncOneProject(vaultDir, p, nativeDir, "push", { dryRun });
     allResults.push({ project: p, results });
   }
   if (dryRun) return allResults;
@@ -321,8 +353,8 @@ function push(vaultDir, { project, dryRun } = {}) {
   if (diff.status !== 0) {
     assertNoSecrets(vaultDir);
     run("git", ["commit", "-m", `vault push from ${hostId()}`], vaultDir);
-    if (hasRemote(vaultDir)) safePush(vaultDir);
   }
+  pushIfAhead(vaultDir);
   return allResults;
 }
 
@@ -331,7 +363,7 @@ function pull(vaultDir, { project, dryRun } = {}) {
   const projects = discoverProjects(vaultDir, project);
   const allResults = [];
   for (const { project: p, nativeDir } of projects) {
-    const results = syncOneProject(vaultDir, p, nativeDir, "pull");
+    const results = syncOneProject(vaultDir, p, nativeDir, "pull", { dryRun });
     allResults.push({ project: p, results });
   }
   return allResults;

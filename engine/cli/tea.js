@@ -20,6 +20,13 @@ const {
   summarizeCost,
 } = require("../lib/hook-runtime");
 const {
+  push: vaultPush,
+  pull: vaultPull,
+} = require("../lib/vault-sync");
+const {
+  consolidate: vaultConsolidate,
+} = require("../lib/vault-consolidate");
+const {
   buildCachePrompt,
   writeCacheSplit,
 } = require("../lib/prompt-cache");
@@ -66,7 +73,10 @@ Usage:
   node tea.js dashboard [path] [--out <file>] [--repo <path>] [--json]
   node tea.js vault init [path]
   node tea.js vault github-init [path] [--repo token-efficient-agent-memory-vault]
-  node tea.js vault sync [path] [--message <text>]
+  node tea.js vault sync [path] [--project <name>] [--dry-run] [--json]
+  node tea.js vault push [path] [--project <name>] [--dry-run] [--json]
+  node tea.js vault pull [path] [--project <name>] [--dry-run] [--json]
+  node tea.js vault consolidate [path] [--confirm] [--json]
   node tea.js vault status [path]
   node tea.js memory-map show [path]
   node tea.js memory-map recall <query> [path] [--json]
@@ -1122,6 +1132,52 @@ function vaultSync(dirArg, message) {
   console.log(`vault_synced: ${vaultDir}`);
 }
 
+function vaultPushPullCommand(dirArg, args, json, mode) {
+  const vaultDir = resolveMemoryDir(dirArg);
+  const project = argValue(args, "--project", null);
+  const dryRun = hasFlag(args, "--dry-run");
+  const opts = { project, dryRun };
+  const results = mode === "sync"
+    ? [...vaultPush(vaultDir, opts), ...vaultPull(vaultDir, opts)]
+    : mode === "push" ? vaultPush(vaultDir, opts) : vaultPull(vaultDir, opts);
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, mode, dryRun, results }, null, 2));
+    return;
+  }
+  console.log(`vault_${mode}${dryRun ? "_dry_run" : ""}: ${vaultDir}`);
+  let changes = 0;
+  for (const { project: p, results: fileResults } of results) {
+    for (const r of fileResults) {
+      changes++;
+      console.log(`  ${p}/${r.file}: ${r.action}`);
+    }
+  }
+  if (!changes) console.log("  (nothing to reconcile)");
+}
+
+function vaultConsolidateCommand(dirArg, args, json) {
+  const vaultDir = resolveMemoryDir(dirArg);
+  const confirm = hasFlag(args, "--confirm");
+  const results = vaultConsolidate(vaultDir, { confirm });
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, confirm, results }, null, 2));
+    return;
+  }
+  console.log(`vault_consolidate${confirm ? "" : "_dry_run"}: ${vaultDir}`);
+  for (const r of results) {
+    console.log(`  ${r.filePath}`);
+    console.log(`    ${r.stats.blocksIn} blocks -> ${r.stats.blocksKept} kept`
+      + ` (${r.stats.stubLinesDropped} noise lines, ${r.stats.dupLinesDropped} duplicate lines dropped)`);
+    if (r.nearDupes.length) {
+      console.log(`    ${r.nearDupes.length} near-duplicate pair(s) found, report-only -- not auto-merged:`);
+      for (const d of r.nearDupes.slice(0, 5)) {
+        console.log(`      [${d.overlap}] "${d.a.text.slice(0, 60)}" <-> "${d.b.text.slice(0, 60)}"`);
+      }
+    }
+  }
+  if (!confirm) console.log("  (dry run -- pass --confirm to apply)");
+}
+
 function vaultGithubInit(dirArg, repoName) {
   const vaultDir = resolveMemoryDir(dirArg);
   const name = repoName || "token-efficient-agent-memory-vault";
@@ -1693,14 +1749,31 @@ function main() {
       return;
     }
     if (subcommand === "sync") {
-      vaultSync(positionalArgs(args.slice(2), ["--message"])[0], argValue(args, "--message", "Update memory vault"));
+      // The single "button": native-memory <-> vault, both directions. push() already pulls
+      // first and reconciles bidirectionally per-file (reconcileFile handles both directions
+      // on its own); pull() runs again after so the synced-index file
+      // (_synced-from-other-machines.md) gets written too. Slight redundancy, not a
+      // correctness issue -- reconciling already-synced content a second time is a no-op.
+      vaultPushPullCommand(positionalArgs(args.slice(2), ["--project"])[0], args, hasFlag(args, "--json"), "sync");
+      return;
+    }
+    if (subcommand === "push") {
+      vaultPushPullCommand(positionalArgs(args.slice(2), ["--project"])[0], args, hasFlag(args, "--json"), "push");
+      return;
+    }
+    if (subcommand === "pull") {
+      vaultPushPullCommand(positionalArgs(args.slice(2), ["--project"])[0], args, hasFlag(args, "--json"), "pull");
+      return;
+    }
+    if (subcommand === "consolidate") {
+      vaultConsolidateCommand(positionalArgs(args.slice(2))[0], args, hasFlag(args, "--json"));
       return;
     }
     if (subcommand === "github-init") {
       vaultGithubInit(positionalArgs(args.slice(2), ["--repo"])[0], argValue(args, "--repo", "token-efficient-agent-memory-vault"));
       return;
     }
-    throw new Error("Usage: node tea.js vault init|github-init|sync|status");
+    throw new Error("Usage: node tea.js vault init|github-init|sync|push|pull|consolidate|status");
   }
 
   if (command === "memory-map") {
