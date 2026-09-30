@@ -189,10 +189,20 @@ def _clause_around(text, idx, limit=200):
     return " ".join(text[start:end].split())[:limit]
 
 
+def _is_hook_noise(text):
+    """Shared with _scan_mistakes below -- the same self-amplifying loop (this
+    hook's own injected feedback gets read back as if it were new user content
+    on the next Stop) turned out to hit staging too, not just the mistakes
+    ledger it was first fixed for on 2026-09-09. See _scan_mistakes's comment
+    for the full mechanism; factored out so a third recurrence isn't possible."""
+    return "Stop hook feedback" in text or "repeat a mistake already logged" in text
+
+
 def _categorize(msgs):
     found = {"feedback":[],"project":[],"user":[]}
     for m in msgs:
         if m["role"] != "user": continue
+        if _is_hook_noise(m["text"]): continue
         text = _user_said(m["text"])
         if not text or len(text) > 4000:   # empty, or pasted content rather than an instruction
             continue
@@ -227,8 +237,7 @@ def _scan_mistakes(msgs):
         # it degrades the signal for every project, since the hook's whole job
         # is to surface REAL past mistakes at the moment they are about to
         # recur.
-        if ("Stop hook feedback" in text
-                or "repeat a mistake already logged" in text):
+        if _is_hook_noise(text):
             continue
         for pat in MISTAKE_PATTERNS:
             hit = re.search(pat, text, re.IGNORECASE)
@@ -256,6 +265,17 @@ def _repo_root(cwd):
 
     Falls back to cwd when there is no .git anywhere above -- a non-repo
     directory keeps the old behaviour rather than erroring.
+
+    A git WORKTREE also has this bug, found 2026-09-30: its .git is a FILE
+    (this function's own prior comment already said so) containing
+    "gitdir: <main-repo>/.git/worktrees/<name>" -- but the old code just
+    returned the worktree directory itself, same as a normal clone, so every
+    agent worktree (Aurora runs these routinely) minted its own phantom vault
+    "project" (e.g. agent-aa4095ea778b45a74) exactly like the pre-2026-09-10
+    subdirectory bug this function was written to fix. Confirmed live:
+    .claude/worktrees/agent-aa4095ea778b45a74/.git literally reads
+    "gitdir: C:/Users/mohit/Aurora gatway/.git/worktrees/agent-aa4095ea778b45a74".
+    Now resolved back through that pointer to the real repo root.
     """
     try:
         here = Path(cwd).resolve()
@@ -263,7 +283,20 @@ def _repo_root(cwd):
         return Path(cwd)
     for cand in [here, *here.parents]:
         try:
-            if (cand / ".git").exists():   # dir for a normal clone, file for a worktree
+            git_path = cand / ".git"
+            if git_path.is_dir():
+                return cand
+            if git_path.is_file():
+                try:
+                    content = git_path.read_text(encoding="utf-8", errors="ignore").strip()
+                except Exception:
+                    content = ""
+                if content.lower().startswith("gitdir:"):
+                    gitdir = content.split(":", 1)[1].strip().replace("\\", "/")
+                    marker = "/.git/worktrees/"
+                    idx = gitdir.find(marker)
+                    if idx != -1:
+                        return Path(gitdir[:idx])
                 return cand
         except Exception:
             continue
@@ -516,9 +549,21 @@ def _save_staging(session_id, cwd, found):
     from datetime import datetime
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     staging = _project_staging(cwd)
-    lines = [f"\n## {ts} | {session_id[:8]}\n"]
-    for cat,items in found.items():
-        for item in items: lines.append(f"- [{cat}] {item}\n")
+    # Dedup against what the file already holds, same pattern as _save_mistakes
+    # above (that function's own comment explains why: a byte-identical repeat
+    # is the case that matters once the watermark in main() stops the SAME
+    # window from being rescanned turn after turn -- this is the second line
+    # of defense, not the fix for re-scanning itself).
+    existing = ""
+    if staging.exists():
+        try: existing = staging.read_text(encoding="utf-8", errors="ignore")
+        except Exception: existing = ""
+    lines = []
+    for cat, items in found.items():
+        fresh = [item for item in items if f"[{cat}] {item}" not in existing]
+        for item in fresh: lines.append(f"- [{cat}] {item}\n")
+    if not lines: return
+    lines.insert(0, f"\n## {ts} | {session_id[:8]}\n")
     with open(staging,"a",encoding="utf-8") as f: f.writelines(lines)
 
 def main():
@@ -534,19 +579,24 @@ def main():
     transcript_path = event.get("transcript_path") or event.get("transcriptPath","")
 
     msgs, touched_files, all_msgs = _read_transcript(transcript_path) if transcript_path else ([], set(), [])
-    found = _categorize(msgs)
-    _save_staging(session_id, cwd, found)
-    # Mistake-scan watermark: only consider messages added since the LAST
-    # time this session's Stop hook ran, not the trailing-20 window every
-    # time. Without this, an admission sitting anywhere in a long, quiet
-    # stretch gets re-detected and re-attempted on every single turn for as
-    # long as it stays inside the last 20 -- reproduced directly against a
-    # real duplicate group in this ledger (same session_id, same text,
-    # re-saved 9 times over ~4 hours). The write-side substring dedup in
-    # _save_mistakes still catches a byte-identical repeat if one somehow
-    # gets through; this stops the repeat from being considered at all.
+    # Watermark: only consider messages added since the LAST time this
+    # session's Stop hook ran, not the trailing-20 window every time. Without
+    # this, an admission (or a staging candidate -- found 2026-09-30, same bug,
+    # never applied here even though _scan_mistakes got this fix on 2026-09-09)
+    # sitting anywhere in a long, quiet stretch gets re-detected and
+    # re-attempted on every single turn for as long as it stays inside the
+    # last 20 -- reproduced directly against real duplicate groups in both the
+    # mistakes ledger (9 re-saves over ~4 hours) and staging.md (1,711 of 1,961
+    # entries were pure re-captured noise, checked 2026-09-30). The write-side
+    # dedup in _save_mistakes/_save_staging still catches a byte-identical
+    # repeat if one somehow gets through; this stops the repeat from being
+    # considered at all, which is what actually keeps the file from filling
+    # with duplicates turn after turn rather than just catching them after.
     watermark = _load_watermark(cwd, session_id)
     new_msgs = all_msgs[watermark:] if watermark < len(all_msgs) else []
+
+    found = _categorize(new_msgs)
+    _save_staging(session_id, cwd, found)
 
     # A lesson worth keeping comes from a turn that actually changed something. Computed
     # before the scan, not after, so it can gate the scan as well as the review gate:

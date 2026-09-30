@@ -22,14 +22,31 @@ ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
 def _repo_root(cwd):
     """Walk up from cwd to the git repo root. Mirrors auto_handover.py's
     _repo_root() -- a session started in any subdirectory must still be
-    labeled with the real project, not the subdirectory's own basename."""
+    labeled with the real project, not the subdirectory's own basename.
+
+    Also resolves through a git WORKTREE's .git file (fixed 2026-09-30, same
+    fix applied to all 4 copies of this function -- see auto_handover.py's
+    copy for the full explanation and the live example that proved it)."""
     try:
         here = Path(cwd).resolve()
     except Exception:
         return Path(cwd)
     for cand in [here, *here.parents]:
         try:
-            if (cand / ".git").exists():
+            git_path = cand / ".git"
+            if git_path.is_dir():
+                return cand
+            if git_path.is_file():
+                try:
+                    content = git_path.read_text(encoding="utf-8", errors="ignore").strip()
+                except Exception:
+                    content = ""
+                if content.lower().startswith("gitdir:"):
+                    gitdir = content.split(":", 1)[1].strip().replace("\\", "/")
+                    marker = "/.git/worktrees/"
+                    idx = gitdir.find(marker)
+                    if idx != -1:
+                        return Path(gitdir[:idx])
                 return cand
         except Exception:
             continue

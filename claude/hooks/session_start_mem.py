@@ -26,14 +26,31 @@ def _repo_root(cwd):
     """Walk up from cwd to the git repo root. Falls back to cwd when there is
     no .git anywhere above. Mirrors auto_handover.py's _repo_root() -- the
     handover file lives INSIDE the project repo, not necessarily at cwd, so a
-    session started in a subdirectory must still find the real root."""
+    session started in a subdirectory must still find the real root.
+
+    Also resolves through a git WORKTREE's .git file (fixed 2026-09-30, same
+    fix applied to all 4 copies of this function -- see auto_handover.py's
+    copy for the full explanation and the live example that proved it)."""
     try:
         here = Path(cwd).resolve()
     except Exception:
         return Path(cwd)
     for cand in [here, *here.parents]:
         try:
-            if (cand / ".git").exists():   # dir for a normal clone, file for a worktree
+            git_path = cand / ".git"
+            if git_path.is_dir():
+                return cand
+            if git_path.is_file():
+                try:
+                    content = git_path.read_text(encoding="utf-8", errors="ignore").strip()
+                except Exception:
+                    content = ""
+                if content.lower().startswith("gitdir:"):
+                    gitdir = content.split(":", 1)[1].strip().replace("\\", "/")
+                    marker = "/.git/worktrees/"
+                    idx = gitdir.find(marker)
+                    if idx != -1:
+                        return Path(gitdir[:idx])
                 return cand
         except Exception:
             continue

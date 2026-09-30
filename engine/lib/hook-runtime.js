@@ -32,13 +32,39 @@ const PROFILE_EVENTS = {
 // duplicate this walk should import it from here instead.
 // Mirrors auto_handover.py's _repo_root() (Python side, fixed 2026-09-10 for
 // the same root cause). Falls back to cwd when no .git is found above it.
+// Also resolves through a git WORKTREE's .git file (fixed 2026-09-30, same
+// fix applied to all 4 copies of this function across the JS/Python hooks --
+// a worktree's .git is a FILE containing "gitdir: <main-repo>/.git/worktrees/
+// <name>", and the old code treated that file's presence the same as a normal
+// clone's .git directory, so every agent worktree minted its own phantom
+// vault "project" just like the pre-2026-09-10 subdirectory bug this whole
+// function exists to fix. Confirmed live against a real worktree on disk.
 function repoRoot(cwd) {
   let here;
   try { here = path.resolve(cwd); } catch { return cwd; }
   let dir = here;
   while (true) {
     try {
-      if (fs.existsSync(path.join(dir, ".git"))) return dir;
+      const gitPath = path.join(dir, ".git");
+      const stat = fs.existsSync(gitPath) ? fs.statSync(gitPath) : null;
+      if (stat && stat.isDirectory()) return dir;
+      if (stat && stat.isFile()) {
+        let content = "";
+        try { content = fs.readFileSync(gitPath, "utf8").trim(); } catch { /* ignore */ }
+        if (/^gitdir:/i.test(content)) {
+          const raw = content.split(":").slice(1).join(":").trim();
+          const normalized = raw.replace(/\\/g, "/");
+          const marker = "/.git/worktrees/";
+          const idx = normalized.indexOf(marker);
+          // Slice the ORIGINAL (native-separator) string at the same offset,
+          // not the forward-slash copy used only to find the marker -- the
+          // forward-slash copy is the same length, so the offset lines up,
+          // and this keeps the return value in the platform's native format
+          // like every other branch of this function does.
+          if (idx !== -1) return path.normalize(raw.slice(0, idx));
+        }
+        return dir;
+      }
     } catch { /* ignore and keep walking */ }
     const parent = path.dirname(dir);
     if (parent === dir) return here;
