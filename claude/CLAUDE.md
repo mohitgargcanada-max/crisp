@@ -143,16 +143,22 @@ superseded plans, verbose tool outputs already acted on.
 
 ## Session Rollover
 
-**Enforce at 8-10 user turns** — do not wait for context to fill.
+**Enforce at `TEA_ROLLOVER_TURNS` user turns** (default 12, override in `env`) — do not wait for
+context to fill.
 Steps:
 1. Write compact handoff to memory vault (project label, current state, next actions, open blockers).
-2. Tell user: "Turn 8/10 — handoff saved to memory. Continue in fresh chat for clean context."
-3. Stop adding new work in current session after handoff.
+2. Tell user: "Turn N — handoff saved to memory. Continue in fresh chat for clean context."
+3. **Finish the current task, do not abandon it mid-step** — then ask whether to start the next
+   chat from the handoff. (This used to say "stop adding new work," which contradicted the hook
+   that actually fires — corrected 2026-09-30.)
 
-Rationale: user tends to keep working until chat breaks. Proactive rollover at 8-10 turns
-prevents context drift and lost state. The handoff IS the continuity.
+Rationale: user tends to keep working until chat breaks. Proactive rollover prevents context
+drift and lost state. The handoff IS the continuity.
 
-Hook implementation: see `~/.claude/hooks-registry.md` [UserPromptSubmit turn counter].
+Hook implementation: both rollover hooks (CRISP's own `tea-lifecycle-hook.js` and the
+PowerShell `turn_counter.txt` counter in `claude/settings.json`) read the same
+`TEA_ROLLOVER_TURNS` env var, so they can't silently disagree the way a hardcoded number would.
+If you override the threshold, set the env var — don't hardcode a number in either hook or here.
 
 ## Graphify First (all projects)
 
