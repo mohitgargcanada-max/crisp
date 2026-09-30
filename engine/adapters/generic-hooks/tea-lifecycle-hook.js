@@ -35,6 +35,24 @@ function argValue(flag, fallback) {
   return index === -1 || index + 1 >= process.argv.length ? fallback : process.argv[index + 1];
 }
 
+// Walk up from cwd to the git repo root. Mirrors auto_handover.py's
+// _repo_root() (Python side) -- a session started in any subdirectory must
+// still be labeled with the real project, not the subdirectory's own name.
+// Falls back to the original cwd when no .git is found anywhere above.
+function repoRoot(cwd) {
+  let here;
+  try { here = path.resolve(cwd); } catch { return cwd; }
+  let dir = here;
+  while (true) {
+    try {
+      if (fs.existsSync(path.join(dir, ".git"))) return dir;
+    } catch { /* ignore and keep walking */ }
+    const parent = path.dirname(dir);
+    if (parent === dir) return here;
+    dir = parent;
+  }
+}
+
 function estimateTokens(text) {
   return Math.ceil(String(text || "").length / 4);
 }
@@ -73,7 +91,7 @@ function compactPayload(input) {
   try { payload = input.trim() ? JSON.parse(input) : {}; } catch { payload = { raw: input }; }
   const host = argValue("--host", process.env.TEA_HOOK_HOST || "unknown");
   const event = argValue("--event", process.env.TEA_HOOK_EVENT || payload.hook_event_name || payload.event || "lifecycle");
-  const project = argValue("--project", process.env.TEA_PROJECT || payload.project || payload.project_name || path.basename(payload.cwd || process.cwd()));
+  const project = argValue("--project", process.env.TEA_PROJECT || payload.project || payload.project_name || path.basename(repoRoot(payload.cwd || process.cwd())));
   const fields = pick(payload, [
     "hook_event_name", "event", "session_id", "transcript_path", "cwd", "tool_name",
     "matcher", "command", "description", "prompt", "message", "status", "error",

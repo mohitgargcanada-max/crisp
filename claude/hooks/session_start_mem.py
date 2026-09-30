@@ -65,7 +65,7 @@ def main():
         event = {}
 
     cwd = event.get("cwd", os.getcwd())
-    project_name = Path(cwd).name
+    project_name = _repo_root(cwd).name
 
     handover_path = project_handover_path(cwd)
     if handover_path.exists():

@@ -19,6 +19,23 @@ LOG_FILE  = STATS_DIR / "response-log.jsonl"
 ERROR_LOG = Path.home() / ".claude" / "hooks" / "hook-errors.log"
 
 
+def _repo_root(cwd):
+    """Walk up from cwd to the git repo root. Mirrors auto_handover.py's
+    _repo_root() -- a session started in any subdirectory must still be
+    labeled with the real project, not the subdirectory's own basename."""
+    try:
+        here = Path(cwd).resolve()
+    except Exception:
+        return Path(cwd)
+    for cand in [here, *here.parents]:
+        try:
+            if (cand / ".git").exists():
+                return cand
+        except Exception:
+            continue
+    return here
+
+
 def _last_assistant_text(transcript_path):
     text = ""
     try:
@@ -67,7 +84,7 @@ def main():
     record = {
         "timestamp": datetime.now().isoformat(),
         "session_id": str(session_id)[:12],
-        "project": Path(cwd).name,
+        "project": _repo_root(cwd).name,
         "words": len(text.split()),
         "chars": len(text),
     }
