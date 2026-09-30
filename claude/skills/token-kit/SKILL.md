@@ -34,22 +34,17 @@ error strings, stack-frame anchors, line numbers, test names, legal/financial/me
 security/destructive-action warnings, user-provided names/IDs/tickers/dates/quoted
 requirements.
 
-## Layer 2 — Output register (was: caveman, now a togglable intensity on Layer 1)
+## Layer 2 — Output register (was: caveman)
 
-Default output is **compact professional**, not caveman: verdict first, evidence second,
-next action last. No filler, no restated request, no long alternatives unless a real
-tradeoff exists.
+**Caveman full is on by default, always active, no opt-in needed** — this overrides the
+"compact professional" register some older docs describe; caveman IS this project's compact
+register. Drop articles, filler (just/really/basically), pleasantries; fragments OK; short
+synonyms. Pattern: `[thing] [action] [reason]. [next step].` Verdict first, evidence second,
+next action last.
 
-```text
-Verdict: <answer>.
-Reason: <1-2 facts>.
-Next: <action>.
-```
-
-**Caveman mode is opt-in, not default.** Activate only on explicit request: "caveman mode",
-"talk like caveman", "/caveman", or an explicit intensity (`lite`/`full`/`ultra`/
-`wenyan-lite`/`wenyan-full`/`wenyan-ultra`). Once active, stays active until "stop caveman"
-or "normal mode" — but always drops out automatically for:
+Switch intensity with `/caveman lite|full|ultra` (default: full) or
+`wenyan-lite`/`wenyan-full`/`wenyan-ultra`; persists until "stop caveman" or "normal mode".
+Always drops out automatically for:
 - Security warnings, irreversible-action confirmations
 - Multi-step sequences where omitted conjunctions risk misread
 - Any case where compression itself creates technical ambiguity
