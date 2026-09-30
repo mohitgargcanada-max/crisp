@@ -50,7 +50,7 @@ echo "  ✓ usage_report.py      -> ~/.claude/hooks/"
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 echo ""
 echo "Installing Claude Code skills..."
-for skill in token-kit headroom context-engineer agent-orchestration graphify karpathy-guidelines dev-review-pipeline; do
+for skill in token-kit headroom context-engineer agent-orchestration graphify karpathy-guidelines dev-review-pipeline ai-eval; do
   cp -r "$CRISP/claude/skills/$skill" "$SKILLS/"
   echo "  ✓ $skill -> ~/.claude/skills/$skill"
 done

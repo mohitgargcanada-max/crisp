@@ -50,7 +50,7 @@ Write-Host "  usage_report.py      -> ~/.claude/hooks/" -ForegroundColor Green
 
 # 3. Copy Claude Code skills (includes the vendored third-party skills CRISP depends on)
 Write-Host "`nInstalling Claude Code skills..."
-$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','karpathy-guidelines','dev-review-pipeline')
+$skills = @('token-kit','headroom','context-engineer','agent-orchestration','graphify','karpathy-guidelines','dev-review-pipeline','ai-eval')
 foreach ($s in $skills) {
     Copy-Item "$CRISP\claude\skills\$s" "$SKILLS\$s" -Recurse -Force
     Write-Host "  $s -> ~/.claude/skills/$s" -ForegroundColor Green
