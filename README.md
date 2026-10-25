@@ -1,13 +1,25 @@
-# CRISP — Compressed Retrieval & Intelligent Signal Pipeline
+# CRISP
 
-> Full-stack token compression + persistent memory for Claude Code and OpenAI Codex.
-> One clone, one installer, both hosts — attacks every stage of the AI coding
-> pipeline, not just one end.
+CRISP is a set of hooks, skills, agent definitions and a small Node engine
+that you install into Claude Code and OpenAI Codex. It does two jobs. It
+cuts the tokens an AI coding agent spends on shell output, file reads and
+replies. And it gives the agent a memory that survives between sessions:
+handover notes, a bug ledger, a mistake ledger and a private memory vault.
 
-New to this? **[EXPLAINED.md](EXPLAINED.md)** covers every concept below in
-plain English with real-world analogies and examples — no jargon assumed.
+CRISP integrates other people's tools (RTK, Headroom, Graphify and others).
+It does not replace them. Credits are in [CREDITS.md](CREDITS.md).
 
----
+## Problems it addresses
+
+| Problem | What CRISP does about it |
+|---|---|
+| Long shell and file output fills the context window | RTK rewrites shell commands; a Headroom hook trims large tool results |
+| Verbose agent replies | The `token-kit` skill and `CLAUDE.md` set a short reply style ("caveman") |
+| The agent re-reads the whole repo every session | Graphify knowledge-graph queries are the first step, per `CLAUDE.md` |
+| Context is lost when a chat ends | A hook counts turns, writes a handoff file, and tells the agent to suggest a fresh chat |
+| Several sessions on one project write conflicting notes | One shared `.crisp/HANDOVER.md` per repo, one `## Session <id>` block per session |
+| The same mistake is made twice in one project | `.crisp/MISTAKES.md` is checked on Stop and can block the first stop attempt |
+| Memory that is really a log | Telemetry and memory are kept in separate places; see [docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md) |
 
 ## Honest numbers
 
@@ -39,142 +51,47 @@ in `tea dashboard --repo <path>`.
 
 ---
 
-## What changed (2026-08-22 consolidation)
+## What gets installed
 
-CRISP used to be three separate, partly-overlapping things: this repo (whose
-Codex support was placeholder code that was never actually wired up), a private
-`token-efficient-agent-kit` repo (the real engine, including the real Codex
-integration), and a now-retired `agent-memory-vault` repo (a dead duplicate).
+`install.ps1` (Windows) and `install.sh` (Mac/Linux) do the following.
+Source: the two scripts; read them before running.
 
-They're one repo now:
-- **`engine/`** — the former `token-efficient-agent-kit`, merged in whole. This is
-  the actual engine: `tea.js` CLI, the MCP server, the lifecycle hook shared by
-  both Claude Code and Codex, and adapters for a dozen other hosts (Cursor,
-  Windsurf, Gemini CLI, ChatGPT, and more — only Claude Code and Codex are
-  wired up by `install.ps1`/`install.sh` today, the rest are there if you want them).
-- **`codex/AGENTS.md`** now matches what's *actually* live — the token-efficient-agent
-  MCP server + `tea.js` commands + notify-based session rollover — instead of the
-  invented hook-file scheme it had before.
-- **`claude/hooks/auto_handover.py`** was trimmed — it used to write its own
-  separate handover docs, duplicating what `engine/`'s lifecycle hook already
-  does. It now does only the one thing the engine doesn't: categorizing message
-  text into feedback/project/user candidates for Claude Code's own memory files.
-- **`agent-memory-vault`** is retired — folded into `engine/memory-vault/`.
+**Claude Code** (under `~/.claude/`)
 
-### 2026-08-31 — project ledgers, no new PR tracker
+| What | From | To |
+|---|---|---|
+| 6 Python hooks | `claude/hooks/*.py` | `~/.claude/hooks/` (an existing different copy is backed up first as `*.pre-install-backup-<time>`) |
+| 8 skills: `token-kit`, `headroom`, `context-engineer`, `agent-orchestration`, `graphify`, `karpathy-guidelines`, `dev-review-pipeline`, `ai-eval` | `claude/skills/` | `~/.claude/skills/` |
+| 2 agents: `code-reviewer`, `hallucination-reviewer` | `claude/agents/` | `~/.claude/agents/` |
+| Global instructions | `claude/CLAUDE.md` | appended to `~/.claude/CLAUDE.md` if that file does not already contain the word "CRISP"; created if absent |
+| Hook wiring | `claude/settings.json` | created as `~/.claude/settings.json` only if none exists. Otherwise a resolved copy is written to `~/.claude/settings.crisp-hooks.resolved.json` and you merge the `hooks` block by hand |
 
-- Added `.crisp/BUGS.md` and `.crisp/MISTAKES.md` — per-project (not
-  memory-vault) files that persist for the life of the project instead of
-  being subject to memory-vault pruning. `auto_handover.py` now auto-drafts
-  mistake entries from mistake-admission language in the transcript.
-- Deliberately did **not** build a PR/bug-tracker system — `gh pr`/`gh issue`
-  already are one. Added a discipline rule instead (commit messages explain
-  why, PRs link the issue they close) rather than a new tool.
-- Added a written task-routing heuristic to `claude/CLAUDE.md` (parallel vs.
-  sequential, when to use a subagent, model/effort tiering) — judgment
-  guidance, not automation; there's no cost telemetry behind it yet.
-- **Bugfix:** `compactThreshold` (in `claude/settings.json` and referenced in
-  `claude/CLAUDE.md`/`context-engineer/SKILL.md`) is not a real Claude Code
-  setting — verified against
-  [official docs](https://code.claude.com/docs/en/settings-reference), it
-  silently did nothing regardless of value. Removed it; documented the real
-  controls (`autoCompactEnabled`/`autoCompactWindow` in settings.json, or the
-  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` environment variable for a percentage
-  threshold) in its place.
-- Ported the same three additions (project ledgers, gh-based tracking,
-  routing heuristic) to `codex/AGENTS.md`, adapted for Codex's instruction-only
-  model — no Stop hook there, so ledger entries are a direct instruction
-  rather than automatic detection. Also fixed real drift found on the live
-  Codex side: a stale, unmarked duplicate "Token Efficient Automation" block
-  still pointing at the retired `token-efficient-agent-kit` path.
-- `.crisp/MISTAKES.md` is now **enforced, not just logged**: `auto_handover.py`
-  uses Claude Code's real Stop-hook blocking (a top-level
-  `{"decision": "block", "reason": ...}`,
-  see [hooks reference](https://code.claude.com/docs/en/hooks.md)) to block
-  the first stop attempt when the ledger has entries, handing back the 5 most
-  recent mistakes to check the current change against. Checks `stop_hook_active`
-  so it only blocks once per turn. Capped to 5 entries deliberately — the
-  full historical ledger would grow unbounded and defeat the point of a
-  token-efficient project.
+The hook commands in `settings.json` point into the clone's `engine/`
+folder. **Keep the clone where it is after installing.**
 
-## The pipeline
+**Codex** (under `~/.codex/`)
 
-```
-YOUR PROMPT (nothing touches this — compressing intent loses meaning)
-         │
-         ▼
-STAGE 1 — Graphify: query the knowledge graph before reading raw files
-  71.5× token reduction per query vs loading raw files (Graphify-Labs benchmark).
-         │
-         ▼  PreToolUse hook
-STAGE 2 — RTK: shell command output compressed
-  grep -r "import pandas" .  →  rtk grep -r "import pandas" .
-  Measured: 93.8% avg saving on file reads, 15–100% on diffs.
-         │
-         ▼  tool executes
-STAGE 3 — Headroom: large results filtered before context
-  Fires only when saving > 15%. Caps output, dedupes repeated lines.
-         │
-         ▼
-STAGE 4 — Lean code: less code written = fewer output tokens
-  Before writing: does this exist? stdlib? one line?
-         │
-         ▼
-STAGE 5 — Caveman: shorter responses
-  Drops filler, articles, pleasantries from Claude's replies.
-         │
-         ▼  Stop hook
-STAGE 6 — engine/: the shared lifecycle + memory layer
-  tea-lifecycle-hook.js fires on every event, for BOTH Claude Code and Codex.
-  Writes observations.jsonl + session-handoffs, tracks session rollover,
-  exposes it all through an MCP server (observe_add, observe_search, memory_health...).
-```
+- An automation block is written into `~/.codex/AGENTS.md` between
+  `CRISP:AUTOMATION_SNIPPET` markers. Re-running updates it in place.
+- `config.toml` is never edited. The installer prints the MCP server
+  block and the `notify` line for you to paste in.
+- The `notify` multiplexer is a PowerShell script, so automatic turn
+  tracking for Codex is Windows-only today.
 
----
+**Not installed by the scripts**
 
-## What's actually in this repo
+- RTK. It is a separate binary. Install it from
+  [rtk-ai/rtk](https://github.com/rtk-ai/rtk). Do not run `cargo install rtk`
+  (that crate is a different project). Check with `rtk gain`.
+- The `memory-agent` skill and `memory-agent`/`token-efficient-agent` agents
+  exist in `engine/skill/` and `engine/adapters/claude-code/agents/` but
+  are not in the installer's lists. **[unverified: whether this is intended]**
+- Companion plugins (superpowers, claude-security and others). The
+  installer checks for them and prints or runs the install command.
 
-```
-crisp/
-├── LICENSE                    # MIT — covers CRISP's own code + engine/
-├── THIRD_PARTY_NOTICES.md     # exact upstream license per dependency
-├── CREDITS.md                 # who built what
-├── claude/
-│   ├── CLAUDE.md               # Drop-in global config
-│   ├── settings.json           # Hook wiring for Claude Code
-│   ├── hooks/
-│   │   ├── headroom_filter.py  # PostToolUse: compress tool results, logs gain
-│   │   ├── auto_handover.py    # Stop: memory-candidate staging (trimmed, see above)
-│   │   ├── usage_tracker.py    # Stop: logs response word/char count
-│   │   ├── usage_report.py     # manual: `rtk gain` equivalent for Headroom + response length
-│   │   ├── session_start_mem.py # SessionStart: load prior session context
-│   │   └── skill_suggest.py    # UserPromptSubmit: suggest missing skills
-│   └── skills/
-│       ├── token-kit/          # Unified: caveman + TEA + RTK behavior
-│       ├── headroom/           # Tool output compression patterns
-│       ├── context-engineer/   # Session + CLAUDE.md optimization
-│       ├── agent-orchestration/ # CRISP's own short fan-out/pipeline/handoff cheatsheet
-│       ├── graphify/           # Vendored as-is (MIT, see LICENSE inside)
-│       └── karpathy-guidelines/ # LLM-coding-discipline principles (vendored, MIT)
-├── codex/
-│   └── AGENTS.md               # Same pipeline for Codex — real wiring, see below
-├── engine/                    # ex-token-efficient-agent-kit, merged in whole
-│   ├── cli/tea.js              # stats, vault, observe, session-rollover, wake, cost, instincts...
-│   ├── mcp-server/              # the token-efficient-agent MCP server
-│   ├── adapters/
-│   │   ├── generic-hooks/      # tea-lifecycle-hook.js — shared by every host
-│   │   ├── claude-code/        # install-hooks.ps1, agent defs
-│   │   ├── codex/               # notify-multiplexer.ps1, AUTOMATION_AGENTS_SNIPPET.md
-│   │   └── (cursor/, windsurf/, gemini-cli/, chatgpt/, hermes/, ...)
-│   ├── memory-vault/            # TEMPLATE ONLY — your real vault populates locally, never committed
-│   └── docs/                    # full engine docs (LAYMAN_GUIDE.md is the best start)
-├── install.ps1                 # Windows installer — both Claude Code and Codex
-└── install.sh                  # Mac/Linux installer — Claude Code fully, Codex partially (see below)
-```
+## Quick start
 
----
-
-## Quick start — Windows (both hosts)
+Windows (PowerShell):
 
 ```powershell
 git clone https://github.com/mohitgargcanada-max/crisp
@@ -182,146 +99,136 @@ cd crisp
 ./install.ps1
 ```
 
-This installs Claude Code hooks + skills, merges `CLAUDE.md`, and for Codex:
-appends the automation block into `~/.codex/AGENTS.md`, prints the MCP server
-snippet for you to paste into `~/.codex/config.toml` (never auto-edited — it can
-hold secrets), and prints the notify-wiring line for session-rollover tracking.
-
-Install RTK separately (it's a binary, not vendored) from
-[rtk-ai/rtk](https://github.com/rtk-ai/rtk):
+Mac/Linux:
 
 ```bash
-brew install rtk-ai/tap/rtk                                                   # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/develop/install.sh | sh
-# Windows: rtk-x86_64-pc-windows-msvc.zip from https://github.com/rtk-ai/rtk/releases/latest
-rtk init --global
+git clone https://github.com/mohitgargcanada-max/crisp
+cd crisp && chmod +x install.sh && ./install.sh
 ```
 
-> **Do not run `cargo install rtk`.** The crates.io crate under that name is
-> *Rust Type Kit*, an unrelated project — installing it gives you a working
-> `rtk` binary that does something else entirely. Confirm you have the right
-> one with `rtk gain`, which the other project has no subcommand for.
+Clone to `~/tools/crisp`. Two hooks assume that location (see
+Troubleshooting).
 
-Three more things (claude-mem, superpowers, Anthropic's code-review plugin)
-are real Claude Code *plugins* — namespaced skills and/or their own hooks, so
-copying files in flat would break them. `install.ps1`/`install.sh` check
-whether each is installed and print the exact `/plugin marketplace add` +
-`/plugin install` command for any that aren't — see
-[EXPLAINED.md](EXPLAINED.md#companion-plugins--recommended-not-included) for
-what each one does and why it's a companion, not a vendored file. (Andrej
-Karpathy's skill is *not* in this list — it's a single self-contained skill
-with no cross-references, so it's vendored directly instead, replacing the
-old `lean-code-agent`.)
+Requirements: Claude Code with hooks, Python 3.8+, Node.js, the RTK binary,
+and the Codex CLI if you want the Codex side.
 
-## Quick start — Mac/Linux
+### Verify
 
 ```bash
-chmod +x install.sh && ./install.sh
+rtk gain                                          # RTK is the right binary and is counting
+python ~/.claude/hooks/usage_report.py            # Headroom and reply-length stats
+node engine/cli/tea.js session-rollover status    # rollover state
+node engine/cli/tea.js stats                      # token-savings log
 ```
 
-Claude Code side is fully automated, same as Windows. Codex side: the MCP server
-and `tea.js` CLI work fully; the automatic notify→turn-tracking hook
-(`engine/adapters/codex/notify-multiplexer.ps1`) is PowerShell/Windows-only today
-— a shell port is a known gap, not yet built.
+In a new Claude Code session, the start hook prints `[SESSION] Turn counter
+reset to 0.` For Codex, look for the `CRISP:AUTOMATION_SNIPPET:START` block in
+`~/.codex/AGENTS.md`.
 
----
+### Uninstall
 
-## Dashboard — see what each service is actually saving
+There is no uninstall script. **[verified: none in the repo]** To remove CRISP
+by hand, reverse what the installer did:
 
-```powershell
-node <path-to-crisp>/engine/cli/tea.js dashboard --repo <path-to-a-code-repo>
-```
+1. Delete the six hook files from `~/.claude/hooks/`, the eight skill folders
+   from `~/.claude/skills/` and the two agent files from `~/.claude/agents/`.
+2. Remove the CRISP-added section from `~/.claude/CLAUDE.md` (it starts at
+   `# --- CRISP pipeline (auto-added) ---` if it was appended).
+3. Remove the hook entries that point at `engine/` or `~/.claude/hooks/` from
+   `~/.claude/settings.json`.
+4. Remove the marked block from `~/.codex/AGENTS.md`, and the MCP and `notify`
+   lines you pasted into `config.toml`.
+5. Your memory is not touched by the above. It lives in `engine/memory-vault/`
+   (if you used it) and in each project's `.crisp/` folder.
 
-Generates a self-contained HTML report at `engine/.tea-stats/dashboard.html`
-(pass `--out <file>` for a different path, `--json` for raw data instead of
-HTML) showing, per service: messages sent, commands run, responses logged,
-sessions started, and tokens/characters saved — pulled from what each hook
-actually logs (RTK via `rtk gain -f json`, Headroom's own
-`headroom-savings.jsonl`, TEA's `token-savings.jsonl`, Caveman's
-`response-log.jsonl`, Lean code's `lean-debt:` marker count + git code-volume
-trend for whatever repo `--repo` points at, defaulting to the current
-directory). No estimates beyond what each tool already records; if a service
-hasn't fired yet, its card says so instead of showing a fake zero.
+## Main commands
 
----
+All run as `node engine/cli/tea.js <command>` from the clone. (`tea.ps1` in
+the same folder is a thin wrapper that calls it.) The command list below is
+what `node engine/cli/tea.js` prints; run it to see every flag.
 
-## How to verify it's working
+| Command | Use |
+|---|---|
+| `stats`, `receipt`, `gain`, `stats-reset` | Token-savings log from the hooks |
+| `dashboard [--repo <path>]` | Static HTML report per service (written to `engine/.tea-stats/dashboard.html`) |
+| `lean-stats <path>`, `debt <path>` | Count `lean-debt:` markers and code-volume trend |
+| `run -- <cmd>` | Run a command through the token wrapper |
+| `compress <file>` | Compress a prompt file |
+| `vault init \| status` | Set up or inspect the memory vault |
+| `vault push \| pull \| sync [--dry-run]` | Copy Claude Code's native project memory to and from the vault repo |
+| `vault consolidate [--confirm]` | Clean the staging queue. Dry run unless `--confirm` |
+| `vault dashboard` | Regenerate `dashboard.html` for all machines |
+| `memory-map show \| recall <q> \| add <text>` | Read or add to the vault index |
+| `observe add \| search \| get \| timeline` | Telemetry events (not memory) |
+| `memory-health`, `memory-refresh plan \| prune --confirm` | Check and prune the vault |
+| `session-rollover status \| handoff` | Turn counter and handoff files |
+| `wake status \| schedule \| run-due \| cancel` | Scheduled resume after a usage limit |
+| `instincts add \| list \| recall \| promote \| drop` | Learned patterns, each with a confidence |
+| `cost report` | Cost snapshots |
+| `bridge start` | Local bridge server |
 
-**RTK** (after a week of use):
-```bash
-rtk gain          # total savings
-rtk gain --history  # per-command breakdown
-```
+The vault README and the Memory Vault notes refer to `tea vault ...`. The
+bare `tea` name is a shorthand; the verified form is `node engine/cli/tea.js`.
+**[unverified: whether a `tea` alias is installed anywhere]**
 
-**Headroom / Caveman trend**:
-```
-python ~/.claude/hooks/usage_report.py
-```
+## Project files CRISP maintains
 
-**Session rollover / memory** (either host):
-```powershell
-node <path-to-crisp>/engine/cli/tea.js session-rollover status
-node <path-to-crisp>/engine/cli/tea.js stats
-```
+These live inside each project, git-tracked, so they travel with the repo.
 
-**Claude Code**: new session should print `[SESSION] Turn counter reset to 0.`
+| File | Purpose |
+|---|---|
+| `.crisp/HANDOVER.md` | One shared handover. Each session owns one `## Session <8-char-id>` block, newest first |
+| `.crisp/MISTAKES.md` | Lessons from real mistakes. The Stop hook drafts entries from admission phrases and shows up to 5 relevant ones |
+| `.crisp/BUGS.md` | Real bugs found and fixed. Written by hand |
 
-**Codex**: check `~/.codex/AGENTS.md` for the block between
-`<!-- CRISP:AUTOMATION_SNIPPET:START -->` / `:END` markers.
+## How it fits with other pieces
 
----
+- **Mohit Engineering Loop** (skill,
+  [github.com/mohitgargcanada-max/mohit-engineering-loop](https://github.com/mohitgargcanada-max/mohit-engineering-loop)).
+  A separate skill that coordinates Claude and Codex on an engineering task
+  with isolated branches, review and handoffs. It does not need CRISP. When
+  CRISP is present, it uses CRISP's compression and `.crisp/HANDOVER.md`,
+  and keeps its own task state in `.mel/<task>/state.json`. It does not
+  create a second memory vault. Source: its `references/crisp.md`.
+- **Second brain (planned, not built).**
+  [docs/SECOND_BRAIN_GROUND_RULES.md](docs/SECOND_BRAIN_GROUND_RULES.md) sets
+  the rules for a future layer on top of the vault: one durable store, typed
+  facts with sources, small retrieval slices, opt-in sources (transcripts
+  first, then calendar, then email), and confirmation for every outward
+  action. It also plans to retire claude-mem. That file is still untracked in
+  git at the time of writing.
+- **Memory vault.** A separate private repo nested at `engine/memory-vault/`,
+  not a submodule. The public repo ignores everything in it except its README.
+  See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Manual install (no script)
+## Troubleshooting
 
-```bash
-# Claude Code hooks + skills
-cp claude/hooks/*.py ~/.claude/hooks/
-cp -r claude/skills/* ~/.claude/skills/
-cat claude/CLAUDE.md >> ~/.claude/CLAUDE.md   # append, don't replace
-# merge the "hooks" block from claude/settings.json into your existing settings.json
+| Symptom | Likely cause and check |
+|---|---|
+| `rtk gain` fails or does something else | You may have the wrong `rtk` crate. Remove it and install from rtk-ai/rtk |
+| No `[SESSION]` line at session start | Hooks are not in `~/.claude/settings.json`. Merge the `hooks` block from `settings.crisp-hooks.resolved.json` |
+| Hooks run but write nothing useful | Read `~/.claude/hooks/hook-errors.log`. The Python hooks append failures there and exit 0, so a failure is silent otherwise |
+| Handover or vault paths are wrong on your machine | `claude/hooks/session_start_mem.py` line 78 hard-codes `C:\Users\mohit\tools\crisp\engine\memory-vault`. `auto_handover.py` falls back to `~/tools/crisp/engine/memory-vault` unless `TEA_MEMORY_DIR` is set. Set `TEA_MEMORY_DIR`, or clone to `~/tools/crisp`, and fix line 78 if you are not the author |
+| Session start tells the agent to search claude-mem | Same file; the injected text names claude-mem MCP tools. Remove that line if you do not use it |
+| Skill suggestions mention skills you do not have | `skill_suggest.py` has a map with the author's own skill names. Edit it |
+| A hook change you made disappears | The installer overwrites hooks and backs up a different live copy first. The repo copy and the live copy must match; `scripts/pre-commit` fails a commit when they differ |
+| Too many or too few rollover prompts | `TEA_ROLLOVER_TURNS` (engine default 12). Hook set: `TEA_HOOK_PROFILE` = `minimal`, `standard` (default) or `strict`. Disable single events with `TEA_DISABLED_HOOKS` |
+| Raw Bash is not forced through `tea.js run` | Intentional. Strict mode is off unless `TEA_STRICT_BASH=1` |
+| Codex turn tracking does nothing on Mac/Linux | The notify multiplexer is PowerShell only; a shell port is not built |
 
-# Codex
-cat engine/adapters/codex/AUTOMATION_AGENTS_SNIPPET.md >> ~/.codex/AGENTS.md
-# paste the MCP server block (see engine/adapters/codex/README.md) into ~/.codex/config.toml
-```
+Install the drift check per clone with:
+`cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`.
 
----
+## Further reading
 
-## Requirements
+- [EXPLAINED.md](EXPLAINED.md): every concept in plain English.
+- [docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md): six ways agent memory goes wrong.
+- [docs/AGENT_ENGINEERING_101.md](docs/AGENT_ENGINEERING_101.md): course-style introduction.
+- [engine/docs/LAYMAN_GUIDE.md](engine/docs/LAYMAN_GUIDE.md): engine guide.
+- [CHANGELOG.md](CHANGELOG.md).
 
-- Claude Code with hooks support (~v0.117+)
-- Python 3.8+ (Claude Code hook scripts)
-- Node.js (engine/ CLI + MCP server)
-- RTK binary — install separately, see above
-- Codex CLI (for Codex integration)
+## Credits and licence
 
----
-
-## Credits & License
-
-CRISP is integration work — we wired existing tools together, and (as of this
-consolidation) merged our own engine in as part of the same repo. Full credits
-in [CREDITS.md](CREDITS.md); exact upstream licenses per dependency in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-**License:** MIT for CRISP's own code and the merged `engine/` — see
-[LICENSE](LICENSE). Third-party skills keep their own upstream license; see
-THIRD_PARTY_NOTICES.md before redistributing further.
-
-## Memory architecture
-
-CRISP keeps agent memory in a vault that is **project-wise and session-wise**:
-`memory-vault/projects/<project>/handovers/<date>_<session-id>.md`, with session state keyed by
-session id. The vault itself is gitignored — your project memory never leaves your machine.
-
-The design, and the five failure modes that shaped it (telemetry mistaken for memory, capture
-that copies instead of distils, one concept stored in three places, doc rules that drift while
-hooks silently win, and pruning without measuring), are written up in
-**[docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md)**.
-
-For a course-style introduction aimed at people new to this — prompting, context
-engineering, the harness and hooks, scaffolding, the token-saving toolchain and how the whole
-pipeline fits together — see **[docs/AGENT_ENGINEERING_101.md](docs/AGENT_ENGINEERING_101.md)**.
-
-Read it before building your own memory layer. Every rule in it came from a real defect on a
-system its owner considered well built.
+MIT for CRISP's own code and `engine/`; see [LICENSE](LICENSE). Third-party
+skills keep their upstream licences; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [CREDITS.md](CREDITS.md).
