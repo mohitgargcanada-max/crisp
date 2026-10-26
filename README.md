@@ -208,7 +208,7 @@ These live inside each project, git-tracked, so they travel with the repo.
 | `rtk gain` fails or does something else | You may have the wrong `rtk` crate. Remove it and install from rtk-ai/rtk |
 | No `[SESSION]` line at session start | Hooks are not in `~/.claude/settings.json`. Merge the `hooks` block from `settings.crisp-hooks.resolved.json` |
 | Hooks run but write nothing useful | Read `~/.claude/hooks/hook-errors.log`. The Python hooks append failures there and exit 0, so a failure is silent otherwise |
-| Handover or vault paths are wrong on your machine | `claude/hooks/session_start_mem.py` line 78 hard-codes `C:\Users\mohit\tools\crisp\engine\memory-vault`. `auto_handover.py` falls back to `~/tools/crisp/engine/memory-vault` unless `TEA_MEMORY_DIR` is set. Set `TEA_MEMORY_DIR`, or clone to `~/tools/crisp`, and fix line 78 if you are not the author |
+| Handover or vault paths are wrong on your machine | `session_start_mem.py` and `auto_handover.py` look for the vault at `TEA_MEMORY_DIR`, else `~/tools/crisp/engine/memory-vault`. Set `TEA_MEMORY_DIR`, or clone to `~/tools/crisp` |
 | Session start tells the agent to search claude-mem | Same file; the injected text names claude-mem MCP tools. Remove that line if you do not use it |
 | Skill suggestions mention skills you do not have | `skill_suggest.py` has a map with the author's own skill names. Edit it |
 | A hook change you made disappears | The installer overwrites hooks and backs up a different live copy first. The repo copy and the live copy must match; `scripts/pre-commit` fails a commit when they differ |

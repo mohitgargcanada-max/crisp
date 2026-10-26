@@ -196,8 +196,10 @@ Both hosts share the engine. Differences, from the repo:
 
 These are things a newcomer will hit. Each was seen in the code.
 
-1. `claude/hooks/session_start_mem.py:78` hard-codes `C:\Users\mohit\tools\crisp\engine\memory-vault`.
-2. `claude/hooks/auto_handover.py:535` falls back to `~/tools/crisp/engine/memory-vault` unless `TEA_MEMORY_DIR` is set.
+1. `claude/hooks/session_start_mem.py` and `claude/hooks/auto_handover.py` both find the vault at `TEA_MEMORY_DIR`,
+   else `~/tools/crisp/engine/memory-vault` (the first used to hard-code the author's path; fixed 2026-10-26).
+   Clone elsewhere and you must set `TEA_MEMORY_DIR`.
+2. (merged into 1)
 3. The session-start text names claude-mem tools. `docs/SECOND_BRAIN_GROUND_RULES.md` (untracked) says claude-mem is to be retired.
 4. `skill_suggest.py` holds a keyword map with the author's own skill names.
 5. There is no uninstall script.

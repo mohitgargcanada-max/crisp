@@ -75,7 +75,8 @@ def latest_session_heading(handover_path):
     return None
 
 
-VAULT_DIR = Path(r"C:\Users\mohit\tools\crisp\engine\memory-vault")
+# Same resolution as auto_handover.py's _vault_dir(): TEA_MEMORY_DIR, else the default clone location.
+VAULT_DIR = Path(os.environ.get("TEA_MEMORY_DIR") or Path.home() / "tools" / "crisp" / "engine" / "memory-vault")
 
 
 def _consolidation_nag_line():
