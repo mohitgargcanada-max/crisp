@@ -1,4 +1,4 @@
-# Self-improving skills loop — plan (P-457, 2026-10-26, DRAFT, not built)
+# Self-improving skills loop — plan (P-457, 2026-10-26; Phase 1 built, Phases 2-3 not built)
 
 Goal (Mohit, 2026-10-26): every skill in CRISP notices its own problems by watching how work is actually done,
 and proposes an improvement to itself. Applies to ALL skills (global `~/.claude/skills`, Codex skills, project
@@ -57,6 +57,20 @@ CC BY 4.0). That skill is NOT installed; this is CRISP's own build, reusing CRIS
 - Phase 1 (capture only, 1 session): attribution + signal capture + `tea skills observations` listing. Run 2
   weeks; check false-positive rate by hand before any batch exists (the 2026-09-08 MISTAKES lesson: regexes on
   analysis prose fabricate entries).
+  **BUILT 2026-10-26, not yet committed** (`_capture_skill_observations` in `claude/hooks/auto_handover.py`,
+  `tea.js skills observations`, tests in `claude/hooks/tests/`). What it does and does not do:
+  - Signals captured: `correction`, `override`, `mistake`, `retry`. Not captured yet: MEL review findings and
+    repeated manual sequences (new-skill candidates); both move to Phase 2.
+  - Attribution window: skills active in the current turn or the two before it. A correction or override is
+    tied to skills from the two turns BEFORE the user's message; the evidence field says how many turns back.
+  - One line per (signal, skill), with a `turn` field (first 8 chars of the user message uuid) added to the
+    schema above; dedup is per session + turn + kind + skill.
+  - Replayed over 703 real turns from 45 recent sessions before shipping: 15 retry and 3 correction signals.
+    A bare leading "no"/"wait"/"stop" was dropped from the correction patterns after it fired on answers to
+    questions (6 of 9 hits in the first replay).
+  - Reads only the transcript tail (whole-file read cost 56 s on a 1.4 GB transcript; tail read 0.2 s).
+  - Hand-check after 2 weeks: `node engine/cli/tea.js skills observations --json`, mark each row real/false,
+    and only build Phase 2 if the false-positive rate is acceptable.
 - Phase 2: weekly batch + proposal files + cross-provider review.
 - Phase 3: approve/apply/measure + new-skill candidates.
 

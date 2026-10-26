@@ -10,7 +10,7 @@
 | Claude Code hooks (Python) | `claude/hooks/*.py`, installed to `~/.claude/hooks/` | Six small scripts: Headroom filter, handover and ledger writer, session-start recall, reply-length tracker, usage report, skill suggester |
 | Lifecycle hook (Node) | `engine/adapters/generic-hooks/tea-lifecycle-hook.js` | One script wired to 21 Claude Code events in `claude/settings.json` (though the default `standard` profile only acts on 13 of them) and to Codex `notify`. Records events, runs rollover and wake logic |
 | Engine library | `engine/lib/*.js` | `session-rollover`, `hook-runtime`, `wake-manager`, `vault-sync`, `vault-consolidate`, `machine-state`, `dashboard-html`, `prompt-cache` |
-| CLI | `engine/cli/tea.js` (`tea 0.3.0`) | All commands: stats, vault, memory-map, observe, session-rollover, wake, instincts, cost |
+| CLI | `engine/cli/tea.js` (`tea 0.3.0`) | All commands: stats, vault, memory-map, observe, session-rollover, wake, instincts, cost, skills observations |
 | MCP server | `engine/mcp-server/server.js` | Exposes the same memory and observation functions to Codex (and any MCP host) |
 | Skills and agents | `claude/skills/`, `claude/agents/`, `engine/skill/` | Instruction cards loaded on demand; subagent definitions |
 | Instruction files | `claude/CLAUDE.md`, `codex/AGENTS.md` | Always-loaded rules for the two hosts |
@@ -50,6 +50,9 @@
  on Stop:
  +--------------------+  candidates   +--------------------------------+
  | auto_handover.py   |-------------->| <vault>/projects/<p>/staging.md|  raw capture queue
+ |                    |  skill signals+--------------------------------+
+ |                    |-------------->| <vault>/projects/<p>/skill-    |  P-457 phase 1, capture only
+ |                    |               |   observations.jsonl           |
  |                    |  mistakes     +--------------------------------+
  |                    |-------------->| <repo>/.crisp/MISTAKES.md      |  durable, in the repo
  |                    |<--------------| reads it back; may block 1st   |
@@ -109,6 +112,28 @@ returns `{"decision": "block", "reason": ...}` once per turn
 (`stop_hook_active` prevents a loop). Relevance is by file basename touched,
 not by meaning. Vault path: `TEA_MEMORY_DIR`, else
 `~/tools/crisp/engine/memory-vault`.
+
+It also records **skill observations** (P-457 phase 1, capture only; plan in
+`docs/SELF_IMPROVING_SKILLS_PLAN.md`). It reads the last three turns of the
+transcript and works out which skills were active: `Skill` tool calls, the
+`Base directory for this skill:` text a skill load injects, `<command-name>`
+blocks (built-in commands such as `/model` excluded), and `SKILL.md` files read.
+It reads only the tail of the transcript file, so its cost does not grow with
+session length. For the current turn it looks for four signals: a user correction of an earlier
+reply (`correction`), the user overriding a step while a skill was active
+(`override`), a mistake admission found by the MISTAKES.md detector (`mistake`),
+and the same tool call failing twice or more (`retry`, from the `is_error` flag,
+never from tool output text). Only real user speech is scanned: isMeta entries
+(skill text, Stop-hook feedback), tool results, compaction summaries and injected
+blocks are not. One JSON line per signal and skill goes to
+`<vault>/projects/<project>/skill-observations.jsonl`
+(`{ts, session, project, turn, skill, kind, evidence, quote, files}`), skill
+`unknown` when none was active in the last three turns, deduplicated per
+session, turn, kind and skill. Quotes are at most 15 words and are blanked when
+they match the `learnInstinctFromPrompt` secret pattern or hold a 24+ character
+run mixing letters and digits. Any failure is written to `hook-errors.log` and
+the Stop event carries on. Nothing reads the file automatically yet;
+`tea.js skills observations` lists it. Tests: `claude/hooks/tests/`.
 
 **`session_start_mem.py`** (SessionStart). Prints a recall instruction block
 plus the path and latest session heading of `<repo>/.crisp/HANDOVER.md`. If

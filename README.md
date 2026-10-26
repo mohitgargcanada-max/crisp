@@ -19,6 +19,7 @@ It does not replace them. Credits are in [CREDITS.md](CREDITS.md).
 | Context is lost when a chat ends | A hook counts turns, writes a handoff file, and tells the agent to suggest a fresh chat |
 | Several sessions on one project write conflicting notes | One shared `.crisp/HANDOVER.md` per repo, one `## Session <id>` block per session |
 | The same mistake is made twice in one project | `.crisp/MISTAKES.md` is checked on Stop and can block the first stop attempt |
+| A skill keeps causing the same problem and nobody notices | The Stop hook records corrections, overrides, repeated failures and mistake admissions against the skills active at the time; `tea.js skills observations` lists them (capture only, see [docs/SELF_IMPROVING_SKILLS_PLAN.md](docs/SELF_IMPROVING_SKILLS_PLAN.md)) |
 | Memory that is really a log | Telemetry and memory are kept in separate places; see [docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md) |
 
 ## Honest numbers

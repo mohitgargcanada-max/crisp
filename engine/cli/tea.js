@@ -109,6 +109,7 @@ Usage:
   node tea.js instincts recall <query> [path] [--project <name>] [--json]
   node tea.js instincts promote <id> [path] [--confidence 0.85] [--json]
   node tea.js instincts drop <id> [path] [--json]
+  node tea.js skills observations [path] [--project <name>] [--skill <name>] [--kind correction|override|mistake|retry] [--json]
   node tea.js cache-prompt build <stable-file> <dynamic-file> [--out <file>] [--key <name>] [--json]
   node tea.js cache-prompt split <prompt-file> [--out-dir <dir>] [--json]
   node tea.js bridge start [--port 6768]
@@ -926,6 +927,52 @@ function dropInstinctCommand(id, dirArg, json) {
     return;
   }
   console.log(`instinct_dropped: ${id}`);
+}
+
+// Read-only. Rows are written by the Stop hook (claude/hooks/auto_handover.py,
+// P-457 phase 1) to <vault>/projects/<project>/skill-observations.jsonl.
+function skillObservationsCommand(dirArg, args, json) {
+  const vaultDir = resolveMemoryDir(dirArg);
+  const projectFilter = argValue(args, "--project", "");
+  const skillFilter = String(argValue(args, "--skill", "")).toLowerCase();
+  const kindFilter = argValue(args, "--kind", "");
+  const projectsDir = path.join(vaultDir, "projects");
+  const projects = projectFilter
+    ? [projectFilter]
+    : (fs.existsSync(projectsDir) ? fs.readdirSync(projectsDir) : []);
+  const rows = [];
+  for (const project of projects) {
+    for (const row of readJsonlFile(path.join(projectsDir, project, "skill-observations.jsonl"))) {
+      if (skillFilter && String(row.skill || "").toLowerCase() !== skillFilter) continue;
+      if (kindFilter && row.kind !== kindFilter) continue;
+      rows.push(row);
+    }
+  }
+  rows.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  const bySkill = {};
+  for (const row of rows) {
+    const key = `${row.skill} ${row.kind}`;
+    bySkill[key] = (bySkill[key] || 0) + 1;
+  }
+  if (json) {
+    console.log(JSON.stringify({ vaultDir, count: rows.length, counts: bySkill, observations: rows }, null, 2));
+    return;
+  }
+  console.log(`vault_dir: ${vaultDir}`);
+  if (!rows.length) {
+    console.log("skill_observations: none");
+    return;
+  }
+  for (const row of rows) {
+    console.log(`${row.ts} ${row.project} ${String(row.session || "").slice(0, 8)}/${row.turn} skill=${row.skill} kind=${row.kind}`);
+    console.log(`  evidence: ${row.evidence}`);
+    if (row.quote) console.log(`  quote: ${row.quote}`);
+    if (row.files && row.files.length) console.log(`  files: ${row.files.join(", ")}`);
+  }
+  console.log(`total: ${rows.length}`);
+  for (const [key, count] of Object.entries(bySkill).sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${key}: ${count}`);
+  }
 }
 
 function buildCachePromptCommand(args, json) {
@@ -1957,6 +2004,15 @@ function main() {
       return;
     }
     throw new Error("Usage: node tea.js instincts add|list|recall|promote|drop");
+  }
+
+  if (command === "skills") {
+    if (args[1] === "observations") {
+      const dir = positionalArgs(args.slice(2), ["--project", "--skill", "--kind"])[0];
+      skillObservationsCommand(dir, args, hasFlag(args, "--json"));
+      return;
+    }
+    throw new Error("Usage: node tea.js skills observations [path] [--project <name>] [--skill <name>] [--kind <kind>] [--json]");
   }
 
   if (command === "cache-prompt") {

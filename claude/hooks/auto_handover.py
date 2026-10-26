@@ -10,7 +10,8 @@ what TEA (token-efficient-agent-kit, vendored as crisp/engine) already does via
 tea-lifecycle-hook.js (session-handoffs/, observations.jsonl) and `tea.js
 session-rollover`. This hook now does only what TEA doesn't: categorizing
 raw message text into feedback/project/user candidates for the curated memory
-files under ~/.claude/projects/<project>/memory/, plus the mistake-ledger draft.
+files under ~/.claude/projects/<project>/memory/, plus the mistake-ledger draft,
+plus skill observations (P-457 phase 1; see the section above main()).
 """
 from __future__ import annotations
 import json, os, re, sys, traceback
@@ -535,11 +536,15 @@ def _vault_dir():
     return Path.home() / "tools" / "crisp" / "engine" / "memory-vault"
 
 
-def _project_staging(cwd):
+def _project_slug(cwd):
     # basename of the REPO ROOT, not of cwd -- a session started in a
     # subdirectory used to mint projects/<subdir-name>/ in the vault.
     project = _repo_root(cwd).name.lower().replace(" ","-").replace(chr(92),"").replace("/","")
-    staging_dir = _vault_dir() / "projects" / (project or "unassigned")
+    return project or "unassigned"
+
+
+def _project_staging(cwd):
+    staging_dir = _vault_dir() / "projects" / _project_slug(cwd)
     staging_dir.mkdir(parents=True, exist_ok=True)
     return staging_dir / "staging.md"
 
@@ -565,6 +570,284 @@ def _save_staging(session_id, cwd, found):
     if not lines: return
     lines.insert(0, f"\n## {ts} | {session_id[:8]}\n")
     with open(staging,"a",encoding="utf-8") as f: f.writelines(lines)
+
+
+# --- Skill observations (P-457 phase 1: capture only) -----------------------
+# Which skills were active this turn, and what went wrong around them. One JSON
+# line per (signal, skill) in <vault>/projects/<project>/skill-observations.jsonl.
+# Nothing reads this file automatically yet; `tea skills observations` lists it.
+# Plan: docs/SELF_IMPROVING_SKILLS_PLAN.md. Phase 1 runs two weeks and is checked
+# by hand for false positives before any batch is built on it, because a regex
+# detector in this file once filled a ledger from analysis prose (2026-09-08).
+#
+# Only REAL user speech is scanned for corrections: isMeta entries (skill text,
+# Stop-hook feedback), tool results, compaction summaries and injected blocks are
+# never user speech. Tool output is only looked at for its is_error flag, never
+# its text, so a quoted error inside a tool result cannot become a signal.
+
+# Same pattern as learnInstinctFromPrompt (engine/lib/hook-runtime.js), plus any
+# 24+ char run mixing letters and digits, so a key outside the pattern's names is
+# dropped too. (Letters-only runs such as MCP tool names are not keys.)
+_SECRET = re.compile(
+    r"(api[_-]?key|secret|password|passwd|oauth|bearer\s+[a-z0-9._-]+|sk-[a-z0-9_-]{12,}"
+    r"|token\s*[:=]|private key|recovery phrase)", re.I)
+_LONG_TOKEN = re.compile(r"(?=[A-Za-z_+/=-]*[0-9])(?=[0-9_+/=-]*[A-Za-z])[A-Za-z0-9_+/=-]{24,}")
+
+_SKILL_BASE = re.compile(r"^Base directory for this skill:\s*(.+)$", re.M)
+_COMMAND_NAME = re.compile(r"<command-name>\s*/?([\w:.-]+)\s*</command-name>")
+_COMMAND_TAGS = re.compile(
+    r"<(command-name|command-message|command-args|local-command-stdout|side-sessions-event"
+    r"|ci-monitor-event|pasted_content)\b[^>]*>.*?</\1>", re.S | re.I)
+# Built-in slash commands are not skills.
+_BUILTIN_COMMANDS = {
+    "model", "compact", "clear", "config", "help", "login", "logout", "memory", "permissions",
+    "hooks", "status", "cost", "doctor", "resume", "exit", "mcp", "agents", "add-dir", "ide",
+    "vim", "theme", "terminal-setup", "bug", "release-notes", "upgrade", "usage", "context",
+    "export", "rewind", "fast", "effort", "output-style", "statusline", "auto-mode-setup",
+    "plugin", "plugins", "tasks", "todos", "privacy-settings", "install-github-app", "init",
+}
+
+# "The output was wrong", said by the user. Bare "don't"/"never" are left out: they
+# are how instructions are phrased, not corrections. A bare leading "no" or "wait"
+# is left out too: replayed over 702 real turns (2026-10-26) it fired mostly on
+# answers to a question ("no whatever u r doing ... is fine", "wait for this").
+CORRECTION_PATTERNS = [
+    r"^\s*no\b[\s,.!-]+(?:i (?:meant|mean|said|asked|wanted)|that'?s|it'?s|this is|not\b|wrong)",
+    r"\bthat'?s (?:wrong|not (?:right|correct|what i))",
+    r"\b(?:this|it) is (?:wrong|not (?:right|correct))",
+    r"\bnot what i (?:asked|meant|wanted|said)",
+    r"\bi (?:already )?(?:said|told you)\b",
+    r"\b(?:you|u) (?:missed|forgot|ignored|skipped)\b",
+    r"\bwhy (?:did|are|do) (?:you|u) (?:still )?(?:do|doing|use|using|add|adding|skip|skipping|ignore|ignoring)\b",
+    r"^\s*stop(?:[\s,.!]*$| (?:it|that|doing)\b)",
+    r"\bwrong (?:file|approach|answer|place|one|thing)\b",
+]
+# "Don't do that part of the skill", said by the user while a skill is active.
+OVERRIDE_PATTERNS = [
+    r"\bskip (?:the |this |that )?(?:[\w-]+ )?(?:step|review|tests?|check|phase|plan)\b",
+    r"\b(?:don'?t|do not|no need to) (?:run|do|use|follow|bother with|wait for) (?:the |a )?(?:[\w-]+ )?"
+    r"(?:step|review|skill|phase|loop|plan|checklist)\b",
+    r"\bignore (?:the |that |this )?(?:skill|step|rule|checklist)\b",
+    r"\binstead of (?:the |that )?(?:skill|step)\b",
+]
+
+
+def _safe_quote(text, idx=0, words=15, sentence=True):
+    """At most `words` words around idx; '' when the clause looks like a secret.
+    sentence=False takes the text from its start (commands: a '.' in a path is not
+    a sentence end)."""
+    if not text:
+        clause = ""
+    else:
+        clause = _clause_around(text, idx, 400) if sentence else " ".join(text[:400].split())
+    if not clause or _SECRET.search(clause) or _LONG_TOKEN.search(clause):
+        return ""
+    return " ".join(clause.split()[:words])
+
+
+def _skill_name(raw):
+    return str(raw or "").strip().lstrip("/").lower()
+
+
+def _is_real_user(obj, msg):
+    """A turn starts at something the user actually sent, not at harness traffic."""
+    if obj.get("isMeta") or obj.get("isCompactSummary") or obj.get("isSidechain"):
+        return False, ""
+    content = msg.get("content", "")
+    if isinstance(content, list):
+        if any(isinstance(c, dict) and c.get("type") == "tool_result" for c in content):
+            return False, ""
+        text = " ".join(c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
+    else:
+        text = str(content or "")
+    if not _INJECTED_BLOCK.sub(" ", text).strip():
+        return False, ""
+    return True, text
+
+
+def _parse_recent_turns(transcript_path, keep=3):
+    """The last `keep` turns: [{id, text, skills, files, failures}], oldest first.
+
+    Reads only the tail of the file, doubling the window until `keep` real user
+    messages are in it (cap 64 MB). A whole-file read cost 56 s on a 1.4 GB
+    transcript on this machine (2026-10-26); the tail read does not grow with
+    session length. `failures` counts is_error tool results per (tool, input)."""
+    size = os.path.getsize(transcript_path)
+    window = 1 << 20
+    with open(transcript_path, "rb") as f:
+        while True:
+            start = max(0, size - window)
+            f.seek(start)
+            lines = f.read().decode("utf-8", "ignore").splitlines()
+            if start:
+                lines = lines[1:]          # first line is cut mid-way
+            turns = _turns_from_lines(lines, keep)
+            if start == 0 or len(turns) >= keep or window >= (64 << 20):
+                return turns
+            window *= 2
+
+
+def _turns_from_lines(lines, keep=3):
+    parsed, starts = [], 0
+    for line in reversed(lines):
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        parsed.append(obj)
+        msg = obj.get("message") or {}
+        if msg.get("role") == "user" and _is_real_user(obj, msg)[0]:
+            starts += 1
+            if starts >= keep:
+                break
+    parsed.reverse()
+
+    turns, uses = [], {}
+    for obj in parsed:
+        msg = obj.get("message") or {}
+        role = msg.get("role", "")
+        if role == "user":
+            real, text = _is_real_user(obj, msg)
+            if real:
+                turns.append({"id": str(obj.get("uuid") or len(turns))[:8], "text": text,
+                              "skills": set(), "files": set(), "failures": {}})
+                for name in _COMMAND_NAME.findall(text):
+                    if _skill_name(name) not in _BUILTIN_COMMANDS:
+                        turns[-1]["skills"].add(_skill_name(name))
+                continue
+        if not turns:
+            continue
+        turn = turns[-1]
+        content = msg.get("content", "")
+        if role == "user" and obj.get("isMeta"):
+            text = content if isinstance(content, str) else " ".join(
+                c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
+            m = _SKILL_BASE.search(text or "")
+            if m:
+                turn["skills"].add(_skill_name(Path(m.group(1).strip()).name))
+            continue
+        if not isinstance(content, list):
+            continue
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if c.get("type") == "tool_use":
+                name, inp = str(c.get("name", "")), c.get("input") or {}
+                if name == "Skill" and inp.get("skill"):
+                    turn["skills"].add(_skill_name(inp["skill"]))
+                fp = next((inp.get(k) for k in ("file_path", "path", "notebook_path")
+                           if isinstance(inp.get(k), str) and inp.get(k)), "")
+                if fp and Path(fp).suffix:
+                    turn["files"].add(Path(fp).name.lower())
+                    if name == "Read" and Path(fp).name.lower() == "skill.md":
+                        turn["skills"].add(_skill_name(Path(fp).parent.name))
+                if isinstance(inp.get("command"), str):
+                    key = label = " ".join(inp["command"].split())
+                else:   # never quote a tool's raw input (a Write carries a whole file)
+                    key = json.dumps(inp, sort_keys=True)
+                    label = f"{name} {Path(fp).name}" if fp else name
+                uses[c.get("id")] = (name, key, label)
+            elif c.get("type") == "tool_result" and c.get("is_error"):
+                use = uses.get(c.get("tool_use_id"))
+                if use:
+                    turn["failures"][use] = turn["failures"].get(use, 0) + 1
+    return turns
+
+
+def _first_hit(patterns, text):
+    for pat in patterns:
+        hit = re.search(pat, text, re.I | re.M)
+        if hit:
+            return hit
+    return None
+
+
+def _skill_signals(turns, mistakes):
+    """Signals for the LAST turn, each as (kind, skills{name: turns_ago}, evidence, quote, files)."""
+    if not turns:
+        return []
+    cur, prior = turns[-1], turns[:-1]
+    before = {}   # skills whose output the user is now reacting to
+    for ago, t in enumerate(reversed(prior), start=1):
+        for s in t["skills"]:
+            before.setdefault(s, ago)
+    driving = {s: 0 for s in cur["skills"]}
+    for s, ago in before.items():
+        driving.setdefault(s, ago)
+    prior_files = sorted(set().union(*(t["files"] for t in prior))) if prior else []
+    out = []
+
+    said = cur["text"]
+    if not _is_hook_noise(said):
+        said = _COMMAND_TAGS.sub(" ", _user_said(said)).strip()
+        if said and len(said) <= 4000:      # longer is pasted content, not a reply
+            hit = _first_hit(CORRECTION_PATTERNS, said)
+            if hit:
+                out.append(("correction", before, "user corrected an earlier reply",
+                            _safe_quote(said, hit.start()), prior_files))
+            hit = _first_hit(OVERRIDE_PATTERNS, said)
+            if hit and before:
+                out.append(("override", before, "user overrode a step while skill active",
+                            _safe_quote(said, hit.start()), prior_files))
+
+    if mistakes:
+        out.append(("mistake", driving, "mistake admission (same detector as MISTAKES.md)",
+                    _safe_quote(mistakes[0]), sorted(cur["files"])))
+
+    repeats = [(use, n) for use, n in cur["failures"].items() if n >= 2]
+    if repeats:
+        (tool, _key, label), n = max(repeats, key=lambda r: r[1])
+        out.append(("retry", driving, f"same {tool} call failed {n} times in one turn",
+                    _safe_quote(label, sentence=False), sorted(cur["files"])))
+    return out
+
+
+def _observations_path(cwd):
+    d = _vault_dir() / "projects" / _project_slug(cwd)
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "skill-observations.jsonl"
+
+
+def _capture_skill_observations(session_id, cwd, transcript_path, mistakes):
+    """Never raises: a failure here is logged and the Stop event carries on."""
+    try:
+        turns = _parse_recent_turns(transcript_path)
+        signals = _skill_signals(turns, mistakes)
+        if not signals:
+            return 0
+        path = _observations_path(cwd)
+        seen = set()
+        if path.exists():
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                try:
+                    o = json.loads(line)
+                except Exception:
+                    continue
+                if o.get("session") == session_id:
+                    seen.add((o.get("turn"), o.get("kind"), o.get("skill")))
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        turn_id, rows = turns[-1]["id"], []
+        for kind, skills, evidence, quote, files in signals:
+            for skill, ago in (sorted(skills.items()) or [("unknown", None)]):
+                key = (turn_id, kind, skill)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ev = evidence
+                if ago is not None:
+                    ev += f"; skill used {ago} turn(s) earlier" if ago else "; skill used this turn"
+                rows.append({"ts": ts, "session": session_id, "project": _project_slug(cwd),
+                             "turn": turn_id, "skill": skill, "kind": kind, "evidence": ev,
+                             "quote": quote, "files": files[:10]})
+        if rows:
+            with open(path, "a", encoding="utf-8") as f:
+                f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        return len(rows)
+    except Exception as e:
+        _log_error(f"_capture_skill_observations: {e!r}\n{traceback.format_exc()}")
+        return 0
+
 
 def main():
     import os
@@ -605,13 +888,17 @@ def main():
     # replayed as one on every later write turn.
     wrote = _wrote_this_turn(transcript_path) if transcript_path else True
 
+    mistakes = []
     if wrote:
         mistakes = _scan_mistakes(new_msgs)
         _save_mistakes(session_id, cwd, mistakes)
     _save_watermark(cwd, session_id, len(all_msgs))
     gate = _review_gate(cwd, bool(event.get("stop_hook_active")), touched_files, wrote)
     if gate:
-        print(json.dumps(gate))
+        print(json.dumps(gate), flush=True)
+    # Last, so a slow or failing capture can never delay the watermark or the gate.
+    if transcript_path:
+        _capture_skill_observations(session_id, cwd, transcript_path, mistakes)
 
 if __name__ == "__main__":
     try: main()
