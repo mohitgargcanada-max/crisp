@@ -227,7 +227,8 @@ These are things a newcomer will hit. Each was seen in the code.
 2. (merged into 1)
 3. The session-start text names claude-mem tools. `docs/SECOND_BRAIN_GROUND_RULES.md` (untracked) says claude-mem is to be retired.
 4. `skill_suggest.py` holds a keyword map with the author's own skill names.
-5. There is no uninstall script.
+5. `uninstall.ps1` / `uninstall.sh` (added 2026-10-26) are dry-run by default and move, never delete; they leave
+   `CLAUDE.md`, `settings.json` and `config.toml` for you to edit by hand.
 6. `install.ps1`/`install.sh` do not install `memory-agent`, although it exists in `engine/skill/`.
 7. The live README says the vault is "TEMPLATE ONLY" and lists five failure modes; the vault README describes a working nested repo and `MEMORY_ARCHITECTURE.md` lists six. The live README's file tree omits `dev-review-pipeline` and `ai-eval`.
 8. `engine/memory-vault/README.md` is tracked by the public repo and also lives in the nested vault repo, and the two copies differ (the vault copy is newer). **[unverified: which is meant to be the source of truth]**

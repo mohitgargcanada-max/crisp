@@ -128,11 +128,15 @@ reset to 0.` For Codex, look for the `CRISP:AUTOMATION_SNIPPET:START` block in
 
 ### Uninstall
 
-There is no uninstall script. **[verified: none in the repo]** To remove CRISP
-by hand, reverse what the installer did:
+Run `./uninstall.ps1` (Windows) or `./uninstall.sh` (macOS/Linux) from the
+`crisp/` directory. With no argument it only lists what it would do; add
+`-Apply` / `--apply` to act. It moves the files it removes into
+`~/.claude/crisp-uninstall-<timestamp>/` rather than deleting them, so a run
+can be undone. It does step 1 and the AGENTS.md part of step 4 below and
+prints the rest, which you do by hand:
 
-1. Delete the six hook files from `~/.claude/hooks/`, the eight skill folders
-   from `~/.claude/skills/` and the two agent files from `~/.claude/agents/`.
+1. The six hook files in `~/.claude/hooks/`, the eight skill folders in
+   `~/.claude/skills/` and the two agent files in `~/.claude/agents/`.
 2. Remove the CRISP-added section from `~/.claude/CLAUDE.md` (it starts at
    `# --- CRISP pipeline (auto-added) ---` if it was appended).
 3. Remove the hook entries that point at `engine/` or `~/.claude/hooks/` from
