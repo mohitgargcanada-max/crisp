@@ -107,9 +107,13 @@ It does not cover the PowerShell tool.
 `<vault>/projects/<project>/staging.md`; (b) drafts mistake entries into
 `<repo>/.crisp/MISTAKES.md` from admission phrases, with a per-session
 watermark in `.crisp/.mistake_scan_watermarks.json` so the same turn is not
-re-scanned; (c) if the ledger has relevant entries and this turn wrote files,
+re-scanned. The watermark is the byte offset already read plus the files touched
+so far, so each Stop reads only the lines added since the last one (before
+2026-10-26 it re-read the whole transcript, about 100 s on a 1.4 GB file; an old
+message-count entry costs one full read, then converts); (c) if the ledger has relevant entries and this turn wrote files,
 returns `{"decision": "block", "reason": ...}` once per turn
-(`stop_hook_active` prevents a loop). Relevance is by file basename touched,
+(`stop_hook_active` prevents a loop). "This turn wrote files" reads only the
+transcript tail back to the turn's first user message. Relevance is by file basename touched,
 not by meaning. Vault path: `TEA_MEMORY_DIR`, else
 `~/tools/crisp/engine/memory-vault`.
 

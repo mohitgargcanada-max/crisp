@@ -84,61 +84,92 @@ def _read_transcript(transcript_path: str):
     trailing-20 window. touched_files are basenames pulled from Edit/Write/
     Read tool_use inputs in the transcript — used to rank mistake-ledger
     relevance by what's actually being worked on this turn, not just by
-    recency."""
-    msgs = []
-    files = set()
+    recency.
+
+    Whole-file read. main() no longer calls it on every Stop: it reads from the
+    saved byte offset instead (_new_since_watermark)."""
+    msgs, files, _ = _read_new_messages(transcript_path, 0)
+    return msgs[-20:], files, msgs
+
+
+def _message_from_line(line, files):
+    """One transcript line -> {"role", "text"}, or None for anything that is not a
+    user/assistant message with text. Adds touched file basenames to `files`."""
+    obj = json.loads(line)
+    msg = obj.get("message", {})
+    role = msg.get("role","")
+    if role not in ("user","assistant"): return None
+    content = msg.get("content","")
+    if isinstance(content, list):
+        texts = []
+        for c in content:
+            if not isinstance(c, dict): continue
+            if c.get("type") == "text":
+                texts.append(c.get("text",""))
+            elif c.get("type") == "tool_use":
+                inp = c.get("input", {}) or {}
+                for key in ("file_path", "path", "notebook_path"):
+                    val = inp.get(key)
+                    if isinstance(val, str) and val:
+                        # Real bug found 2026-09-13 (Mohit: "dig deeper on
+                        # dcr acronym issue as they keep appearing"): `path`
+                        # is also how Bash/Grep/Glob address a DIRECTORY, not
+                        # just how Edit/Write/Read address a file. Without
+                        # this suffix check, a single directory-scoped tool
+                        # call anywhere in the transcript (e.g. a path ending
+                        # in ".../aurora_scanner") adds that bare directory
+                        # name to `files` forever (the set is kept for the whole
+                        # session, see _save_watermark, so it only
+                        # grows) -- and because a project-root directory
+                        # name is a substring of nearly every file path
+                        # under it, `_relevant_mistakes()`'s substring match
+                        # then locks onto whichever single ledger bullet
+                        # happens to spell out that fully-qualified path
+                        # instead of a bare filename, and shows that SAME
+                        # entry on every subsequent Stop for the rest of the
+                        # session regardless of what's actually being
+                        # touched. A directory basename essentially never
+                        # has a dot-extension, so requiring one is a cheap,
+                        # honest filter -- same "basename only, not
+                        # semantic" philosophy this function already uses,
+                        # not a new kind of check.
+                        p = Path(val)
+                        if p.suffix:
+                            files.add(p.name.lower())
+        text = " ".join(texts)
+    else:
+        text = str(content)
+    text = text.strip()
+    return {"role":role,"text":text} if text else None
+
+
+def _read_new_messages(transcript_path, offset=0):
+    """(messages, touched_files, end_offset) for the transcript from byte `offset` on.
+
+    Transcripts only grow, so main() keeps the byte offset it reached and reads from
+    there on the next Stop: the cost is this turn's lines, not the whole session. A
+    whole-file read took about 100 s on a 1.4 GB transcript on this machine (2026-10-26).
+    A last line that does not parse yet is still being written; it is left for the next
+    Stop and end_offset stops before it."""
+    msgs, files, end = [], set(), offset
     try:
-        # encoding="utf-8" is required: transcripts are UTF-8, but read_text()
-        # defaults to the platform encoding (cp1252 on Windows), which silently
-        # mangles any non-ASCII character — em-dashes became "â€"" in ledgers.
-        for line in Path(transcript_path).read_text(encoding="utf-8", errors="ignore").splitlines():
+        with open(transcript_path, "rb") as f:
+            f.seek(offset)
+            data = f.read()
+        lines = data.split(b"\n")
+        if lines[-1].strip():
+            try: json.loads(lines[-1])
+            except Exception:
+                data = data[:len(data) - len(lines[-1])]
+                lines[-1] = b""
+        end = offset + len(data)
+        # Split on b"\n" and decode per line: utf-8, never the platform encoding
+        # (cp1252 on Windows mangled em-dashes into "â€"" in ledgers). A newline byte
+        # never falls inside a multi-byte character, so no character is cut.
+        for raw in lines:
             try:
-                obj = json.loads(line)
-                msg = obj.get("message", {})
-                role = msg.get("role","")
-                if role not in ("user","assistant"): continue
-                content = msg.get("content","")
-                if isinstance(content, list):
-                    texts = []
-                    for c in content:
-                        if not isinstance(c, dict): continue
-                        if c.get("type") == "text":
-                            texts.append(c.get("text",""))
-                        elif c.get("type") == "tool_use":
-                            inp = c.get("input", {}) or {}
-                            for key in ("file_path", "path", "notebook_path"):
-                                val = inp.get(key)
-                                if isinstance(val, str) and val:
-                                    # Real bug found 2026-09-13 (Mohit: "dig deeper on
-                                    # dcr acronym issue as they keep appearing"): `path`
-                                    # is also how Bash/Grep/Glob address a DIRECTORY, not
-                                    # just how Edit/Write/Read address a file. Without
-                                    # this suffix check, a single directory-scoped tool
-                                    # call anywhere in the transcript (e.g. a path ending
-                                    # in ".../aurora_scanner") adds that bare directory
-                                    # name to `files` forever (this function rescans the
-                                    # whole transcript every call, so the set only
-                                    # grows) -- and because a project-root directory
-                                    # name is a substring of nearly every file path
-                                    # under it, `_relevant_mistakes()`'s substring match
-                                    # then locks onto whichever single ledger bullet
-                                    # happens to spell out that fully-qualified path
-                                    # instead of a bare filename, and shows that SAME
-                                    # entry on every subsequent Stop for the rest of the
-                                    # session regardless of what's actually being
-                                    # touched. A directory basename essentially never
-                                    # has a dot-extension, so requiring one is a cheap,
-                                    # honest filter -- same "basename only, not
-                                    # semantic" philosophy this function already uses,
-                                    # not a new kind of check.
-                                    p = Path(val)
-                                    if p.suffix:
-                                        files.add(p.name.lower())
-                    text = " ".join(texts)
-                else:
-                    text = str(content)
-                text = text.strip()
-                if text: msgs.append({"role":role,"text":text})
+                m = _message_from_line(raw.decode("utf-8", "ignore"), files)
+                if m: msgs.append(m)
             # One malformed line is expected and skippable. `except Exception`
             # rather than a bare `except` so KeyboardInterrupt and SystemExit
             # still propagate instead of being silently swallowed.
@@ -146,8 +177,8 @@ def _read_transcript(transcript_path: str):
     except Exception as e:
         # A whole-transcript failure is NOT expected. Left unlogged it returns an
         # empty scan, which is indistinguishable from "nothing to report".
-        _log_error(f"_read_transcript({transcript_path!r}): {e!r}")
-    return msgs[-20:], files, msgs
+        _log_error(f"_read_new_messages({transcript_path!r}, {offset}): {e!r}")
+    return msgs, files, end
 
 def _user_said(text):
     """Strip harness-injected text so only what the USER actually typed is scanned.
@@ -329,27 +360,55 @@ def _watermark_path(cwd):
 
 
 def _load_watermark(cwd, session_id):
+    """This session's entry: {"offset": bytes read, "files": touched basenames}; a
+    bare int is the message count written before 2026-10-26; None when absent."""
     path = _watermark_path(cwd)
-    if not path.exists(): return 0
+    if not path.exists(): return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return int(data.get(session_id, 0))
+        val = json.loads(path.read_text(encoding="utf-8")).get(session_id)
     except Exception:
-        return 0
+        return None
+    if isinstance(val, dict):
+        try: return {"offset": int(val.get("offset", 0)), "files": list(val.get("files") or [])}
+        except Exception: return None
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return int(val)
+    return None
 
 
-def _save_watermark(cwd, session_id, total_msg_count):
+def _save_watermark(cwd, session_id, offset, files):
+    # The touched-file set is kept here too: it covers the whole session, and only
+    # the lines since `offset` are read on the next Stop.
     path = _watermark_path(cwd)
     data = {}
     if path.exists():
         try: data = json.loads(path.read_text(encoding="utf-8"))
         except Exception: data = {}
-    data[session_id] = total_msg_count
+    data[session_id] = {"offset": offset, "files": sorted(files)}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
         pass
+
+
+def _new_since_watermark(cwd, session_id, transcript_path):
+    """(new_messages, touched_files, end_offset): the messages added since this
+    session's last Stop, and the files touched over the whole session.
+
+    The usual case reads from the saved byte offset. A legacy message-count entry, or
+    no entry, needs one full read (the same cost as before). A transcript shorter than
+    the saved offset was rewritten: nothing counts as new, as with the old count."""
+    state = _load_watermark(cwd, session_id)
+    try: size = os.path.getsize(transcript_path)
+    except Exception: size = -1
+    if isinstance(state, dict) and state["offset"] <= size:
+        new, files, end = _read_new_messages(transcript_path, state["offset"])
+        return new, files | set(state["files"]), end
+    msgs, files, end = _read_new_messages(transcript_path, 0)
+    if isinstance(state, dict):
+        return [], files, end
+    return msgs[state or 0:], files, end
 
 
 def _save_mistakes(session_id, cwd, mistakes):
@@ -415,12 +474,34 @@ def _wrote_this_turn(transcript_path):
 
     On any failure it returns True: an unreadable transcript means we cannot prove the
     turn was read-only, and the safe default is to review rather than to skip silently.
+
+    Reads only the tail, doubling the window until the turn's start is in it (cap 64 MB,
+    past which it answers True). A whole-file read took about 100 s on a 1.4 GB
+    transcript (2026-10-26).
     """
     try:
-        lines = Path(transcript_path).read_text(encoding="utf-8", errors="ignore").splitlines()
+        size = os.path.getsize(transcript_path)
+        window = 1 << 20
+        with open(transcript_path, "rb") as f:
+            while True:
+                start = max(0, size - window)
+                f.seek(start)
+                lines = f.read().decode("utf-8", "ignore").splitlines()
+                if start:
+                    lines = lines[1:]          # first line is cut mid-way
+                verdict = _turn_wrote(lines, whole=start == 0)
+                if verdict is not None:
+                    return verdict
+                if window >= (64 << 20):
+                    return True
+                window *= 2
     except Exception:
         return True
 
+
+def _turn_wrote(lines, whole):
+    """_wrote_this_turn over `lines`; None when the turn's start is not in them and
+    `whole` is False (more of the file is needed)."""
     parsed, last_user = [], -1
     for i, line in enumerate(lines):
         try:
@@ -440,6 +521,8 @@ def _wrote_this_turn(transcript_path):
             for c in content
         ):
             last_user = i
+    if last_user < 0 and not whole:
+        return None
 
     for obj in parsed[last_user + 1:]:
         if not obj:
@@ -861,7 +944,8 @@ def main():
     cwd = event.get("cwd", os.getcwd())
     transcript_path = event.get("transcript_path") or event.get("transcriptPath","")
 
-    msgs, touched_files, all_msgs = _read_transcript(transcript_path) if transcript_path else ([], set(), [])
+    new_msgs, touched_files, end_offset = (_new_since_watermark(cwd, session_id, transcript_path)
+                                           if transcript_path else ([], set(), 0))
     # Watermark: only consider messages added since the LAST time this
     # session's Stop hook ran, not the trailing-20 window every time. Without
     # this, an admission (or a staging candidate -- found 2026-09-30, same bug,
@@ -875,8 +959,7 @@ def main():
     # repeat if one somehow gets through; this stops the repeat from being
     # considered at all, which is what actually keeps the file from filling
     # with duplicates turn after turn rather than just catching them after.
-    watermark = _load_watermark(cwd, session_id)
-    new_msgs = all_msgs[watermark:] if watermark < len(all_msgs) else []
+    # Since 2026-10-26 the watermark is a byte offset, so only the new lines are read.
 
     found = _categorize(new_msgs)
     _save_staging(session_id, cwd, found)
@@ -892,7 +975,7 @@ def main():
     if wrote:
         mistakes = _scan_mistakes(new_msgs)
         _save_mistakes(session_id, cwd, mistakes)
-    _save_watermark(cwd, session_id, len(all_msgs))
+    _save_watermark(cwd, session_id, end_offset, touched_files)
     gate = _review_gate(cwd, bool(event.get("stop_hook_active")), touched_files, wrote)
     if gate:
         print(json.dumps(gate), flush=True)
