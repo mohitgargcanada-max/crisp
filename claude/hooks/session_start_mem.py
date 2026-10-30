@@ -1,7 +1,7 @@
 """
 session_start_mem.py — SessionStart hook.
 Injects a memory recall instruction into Claude's context at session start.
-Claude reads this and automatically runs claude-mem search + file memory scan.
+Claude reads this and automatically scans file memory (MEMORY.md) and the CRISP handover.
 Output to stdout = injected as system context by Claude Code.
 
 Handover convention (binding since 2026-09-20 — see claude/CLAUDE.md "Project
@@ -140,11 +140,10 @@ Project: {project_name} | CWD: {cwd}
 {handover_line}{chr(10) + nag_line if nag_line else ""}
 
 INSTRUCTIONS (execute silently before first response):
-1. Search claude-mem for "{project_name}" context using memory_context or smart_search MCP tool
-2. Scan ~/.claude/projects/*/memory/MEMORY.md for relevant facts
-3. If a handover file exists above, read its latest (topmost) `## Session` section for "Next steps"
-4. Load only small relevant slices — do not dump everything into context
-5. Confirm loaded context in ONE line: "Memory loaded: [X facts, Y decisions]"
+1. Scan ~/.claude/projects/*/memory/MEMORY.md for relevant facts (memory lives in CRISP; claude-mem is retired)
+2. If a handover file exists above, read its latest (topmost) `## Session` section for "Next steps"
+3. Load only small relevant slices — do not dump everything into context
+4. Confirm loaded context in ONE line: "Memory loaded: [X facts, Y decisions]"
 """)
 
 if __name__ == "__main__":
